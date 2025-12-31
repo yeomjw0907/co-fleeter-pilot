@@ -15,9 +15,37 @@ const poolingRoutes = require('./routes/poolingRoutes');
 const app = express();
 const PORT = process.env.PORT || 8000;
 
+// --- Production MongoDB Check ---
+if (process.env.NODE_ENV === 'production' && !process.env.MONGO_URI) {
+    console.error('❌ MONGO_URI environment variable is required for production deployment');
+    console.error('Please set it in Vercel Dashboard → Settings → Environment Variables');
+    process.exit(1);
+}
+
 // --- Middlewares ---
+const allowedOrigins = process.env.NODE_ENV === 'production'
+    ? [process.env.FRONTEND_URL || 'https://*.vercel.app']
+    : ['http://localhost:3000', 'http://localhost:8000'];
+
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:8000'],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+        
+        if (process.env.NODE_ENV === 'production') {
+            // In production, allow any vercel.app domain
+            if (origin.includes('.vercel.app') || origin === process.env.FRONTEND_URL) {
+                return callback(null, true);
+            }
+            return callback(new Error('Not allowed by CORS'));
+        } else {
+            // In development, allow localhost
+            if (allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            return callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true
 }));
 app.use(express.json());
@@ -44,8 +72,15 @@ app.use(express.static(path.join(__dirname, '../frontend')));
     app.use('/api', apiRoutes);
 
     // --- Start Server ---
-    app.listen(PORT, () => {
-        console.log(`Co-Fleeter Backend running on port ${PORT}`);
-        console.log(`Make sure to run frontend on http://localhost:3000 or open index.html`);
-    });
+    if (process.env.NODE_ENV !== 'production') {
+        app.listen(PORT, () => {
+            console.log(`Co-Fleeter Backend running on port ${PORT}`);
+            console.log(`Make sure to run frontend on http://localhost:3000 or open index.html`);
+        });
+    } else {
+        console.log('✅ Co-Fleeter Backend initialized for Vercel Serverless');
+    }
 })();
+
+// Export for Vercel Serverless Functions
+module.exports = app;

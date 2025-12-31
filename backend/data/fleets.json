@@ -13,30 +13,30 @@
   ],
   "user_1765888655541": [
     {
-      "id": "999222",
-      "cii_rating": "A",
-      "co2_ytd": 311.4,
-      "name": "HAPPY005",
-      "type": "Bulk Carrier",
-      "dwt": 50000,
+      "id": "850421",
+      "cii_rating": "N/A",
+      "co2_ytd": 0,
+      "name": "Success",
+      "type": "LNG carrier ( >= 65,000 DWT & < 100,000 )",
+      "dwt": 78000,
       "year": 2025
     },
     {
-      "id": "912234",
+      "id": "850443",
       "cii_rating": "N/A",
       "co2_ytd": 0,
-      "name": "happy02",
-      "type": "Bulk Carrier",
-      "dwt": 50000,
+      "name": "Success2",
+      "type": "LNG carrier < 65,000 DWT)",
+      "dwt": 4500,
       "year": 2025
     },
     {
-      "cii_rating": "N/A",
-      "co2_ytd": 0,
-      "name": "happy03",
-      "id": "911234",
-      "type": "lng",
-      "dwt": 10000,
+      "id": "9947598",
+      "cii_rating": "B",
+      "co2_ytd": 934.2,
+      "name": "Puteri Ledang",
+      "type": "LNG carrier ( >= 65,000 DWT & < 100,000 )",
+      "dwt": 93414,
       "year": 2025
     }
   ],

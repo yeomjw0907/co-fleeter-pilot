@@ -1,5 +1,30 @@
-node_modules
-.DS_Store
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment Variables
 .env
-npm-debug.log
+.env.local
+.env.production
+
+# Vercel
+.vercel
+
+# Logs
 *.log
+npm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Local data (for development only - production uses MongoDB)
+backend/data/*.json
+!backend/data/.gitkeep
+
+# Backups
+*.backup

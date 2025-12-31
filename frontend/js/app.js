@@ -394,7 +394,7 @@ async function renderFleet() {
                         <th class="p-4">IMO Number</th>
                         <th class="p-4">Type</th>
                         <th class="p-4">DWT</th>
-                        <th class="p-4">CII Rating</th>
+
                         <th class="p-4">Action</th>
                     </tr>
                 </thead>
@@ -412,7 +412,7 @@ async function renderFleet() {
             const shipId = (ship.id || 'N/A').replace('imo_', ''); // Display numbers only
             const shipType = ship.type || 'N/A';
             const shipDwt = ship.dwt ? ship.dwt.toLocaleString() : '0';
-            const ciiRating = ship.cii_rating || 'N/A';
+
 
             html += `
                 <tr style="border-top: 1px solid var(--color-border);">
@@ -420,7 +420,7 @@ async function renderFleet() {
                     <td class="p-4 text-muted">${shipId}</td>
                     <td class="p-4">${shipType}</td>
                     <td class="p-4">${shipDwt}</td>
-                    <td class="p-4"><span style="color: var(--color-${ciiRating === 'A' || ciiRating === 'B' ? 'success' : (ciiRating === 'C' ? 'warning' : 'danger')}); font-weight: bold;">${ciiRating}</span></td>
+
                     <td class="p-4 flex gap-2">
                         <button onclick='calcForShip(${JSON.stringify(ship)})' class="btn btn-sm btn-outline">Calculate</button>
                         <button onclick="handleDeleteShip('${ship.id}', '${ship.ownerId || ''}')" class="btn btn-sm btn-outline text-danger" style="border-color: var(--color-danger); color: var(--color-danger);">Delete</button>
@@ -476,12 +476,51 @@ window.closeVesselModal = function () {
     document.getElementById('vessel-modal').classList.add('hidden');
 };
 
+// Validation Helper for Ship Type vs DWT
+function validateShipTypeDwt(type, dwt) {
+    // Only parse if DWT is explicitly mentioned in the type condition
+    if (!type.includes('DWT')) return { valid: true };
+
+    // Remove commas for parsing numbers
+    const cleanType = type.replace(/,/g, '');
+    // Regex to find all conditions like >= 20000, < 50000
+    // Order matters in regex alternation: >= before >
+    const regex = /(>=|<=|>|<)\s*(\d+)/g;
+
+    let match;
+    while ((match = regex.exec(cleanType)) !== null) {
+        const op = match[1];
+        const limit = parseInt(match[2], 10);
+        let pass = true;
+
+        if (op === '>=' && !(dwt >= limit)) pass = false;
+        else if (op === '<=' && !(dwt <= limit)) pass = false;
+        else if (op === '>' && !(dwt > limit)) pass = false;
+        else if (op === '<' && !(dwt < limit)) pass = false;
+
+        if (!pass) {
+            return {
+                valid: false,
+                message: `DWT Mismatch: Selected type requires DWT ${op} ${limit.toLocaleString()}.`
+            };
+        }
+    }
+    return { valid: true };
+}
+
 window.handleRegisterShip = async function (e) {
     e.preventDefault();
     const name = document.getElementById('ship-name').value;
     const imo = document.getElementById('ship-imo').value;
     const type = document.getElementById('ship-type').value;
     const dwt = parseInt(document.getElementById('ship-dwt').value);
+
+    // Validate DWT against Ship Type limits
+    const validation = validateShipTypeDwt(type, dwt);
+    if (!validation.valid) {
+        toast.error(validation.message);
+        return;
+    }
 
     loading.show('Registering vessel...');
     const result = await dataService.registerShip(currentUser, {
@@ -1933,42 +1972,15 @@ function renderCalculator() {
         </div>
     `;
 
-    // Initialize default view
-    setCalcType('CII');
-
-    // Check for prefill data
+    // Check for prefill data first
     if (window.prefillCalcData) {
-        const pd = window.prefillCalcData;
-        window.currentShipContext = pd; // Save for tab switches
-
-        // Set hidden fields
-        setTimeout(() => {
-            const idInput = document.getElementById('calc-ship-id');
-            const nameInput = document.getElementById('calc-ship-name');
-            if (idInput) idInput.value = pd.id || '';
-            if (nameInput) nameInput.value = pd.name || '';
-        }, 50);
-
-        // Only works for CII for now as that uses DWT/Type
-        if (currentCalcType === 'CII') {
-            const dwtInput = document.getElementById('calc-dwt');
-            const typeInput = document.getElementById('cii-type');
-
-            if (dwtInput && pd.dwt) dwtInput.value = pd.dwt;
-            if (typeInput && pd.type) typeInput.value = pd.type;
-
-            const notice = document.getElementById('prefill-notice');
-            notice.textContent = `Pre-filled data for ${pd.name} (${pd.type})`;
-            notice.classList.remove('hidden');
-        }
-
-        // Clear it so it doesn't persist forever, but currentShipContext handles session
-        window.prefillCalcData = null;
+        window.currentShipContext = window.prefillCalcData;
+        window.prefillCalcData = null; // Clear queue
     }
 
+    // Initialize default view (will use currentShipContext)
+    setCalcType('CII');
 
-    // Add default row
-    // addFuelRow('ME'); // Removed to let setCalcType handle it
     renderHistory();
 };
 
@@ -2021,11 +2033,7 @@ window.setCalcType = function (type) {
             <div class="input-group">
                 <label class="input-label">Ship Type</label>
                 <select id="cii-type" class="input-field">
-                    <option value="Bulk Carrier">Bulk Carrier</option>
-                    <option value="Tanker">Tanker</option>
-                    <option value="Container">Container</option>
-                    <option value="Gas Carrier">Gas Carrier (LNG)</option>
-                    <option value="General Cargo">General Cargo</option>
+                    ${SHIP_TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}
                 </select>
             </div>
             <div class="input-group">
@@ -2062,8 +2070,28 @@ window.setCalcType = function (type) {
 
     // Restore context if available
     if (window.currentShipContext) {
-        document.getElementById('calc-ship-id').value = window.currentShipContext.id || '';
-        document.getElementById('calc-ship-name').value = window.currentShipContext.name || '';
+        const pd = window.currentShipContext;
+        const idInput = document.getElementById('calc-ship-id');
+        const nameInput = document.getElementById('calc-ship-name');
+
+        if (idInput) idInput.value = pd.id || '';
+        if (nameInput) nameInput.value = pd.name || '';
+
+        // If in CII mode, pre-fill DWT and Type
+        if (type === 'CII') {
+            const dwtInput = document.getElementById('calc-dwt');
+            const typeInput = document.getElementById('cii-type');
+
+            if (dwtInput && pd.dwt) dwtInput.value = pd.dwt;
+            if (typeInput && pd.type) typeInput.value = pd.type;
+
+            // Update notice if element exists (it's outside commonDiv)
+            const notice = document.getElementById('prefill-notice');
+            if (notice) {
+                notice.textContent = `Pre-filled data for ${pd.name} (${pd.type})`;
+                notice.classList.remove('hidden');
+            }
+        }
     }
 
     // Trigger re-render of fuel inputs/table

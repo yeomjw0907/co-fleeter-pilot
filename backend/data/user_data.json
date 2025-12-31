@@ -62,5 +62,154 @@
         "timestamp": 1766379364340
       }
     ]
+  },
+  "user_1765888655541": {
+    "calculations": [
+      {
+        "type": "CII",
+        "input": {
+          "dwt": 93414,
+          "distance": 1600,
+          "fuelList": [
+            {
+              "class": "Fossil",
+              "type": "ULSFO",
+              "amount": 300,
+              "scope": 1
+            }
+          ],
+          "shipType": "LNG carrier ( >= 65,000 DWT & < 100,000 )",
+          "year": "2024",
+          "reductionRate": 7,
+          "imoNumber": "9947598",
+          "vesselName": "Puteri Ledang"
+        },
+        "result": {
+          "attainedCII": "6.25",
+          "requiredCII": "6.98",
+          "reductionRate": "7%",
+          "ratio": "0.90",
+          "rating": "B",
+          "totalCO2": "934.2"
+        },
+        "timestamp": 1766474067846
+      },
+      {
+        "type": "CII",
+        "input": {
+          "dwt": 93414,
+          "distance": 16000,
+          "fuelList": [
+            {
+              "class": "Fossil",
+              "type": "HFO",
+              "amount": 3000,
+              "scope": 1
+            }
+          ],
+          "shipType": "LNG carrier ( >= 65,000 DWT & < 100,000 )",
+          "year": "2024",
+          "reductionRate": 7,
+          "imoNumber": "9947598",
+          "vesselName": "Puteri Ledang"
+        },
+        "result": {
+          "attainedCII": "6.25",
+          "requiredCII": "6.98",
+          "reductionRate": "7%",
+          "ratio": "0.90",
+          "rating": "B",
+          "totalCO2": "9342.0"
+        },
+        "timestamp": 1766473371550
+      },
+      {
+        "type": "CII",
+        "input": {
+          "dwt": 93414,
+          "distance": 160000,
+          "fuelList": [
+            {
+              "class": "Fossil",
+              "type": "ULSFO",
+              "amount": 300,
+              "scope": 1
+            }
+          ],
+          "shipType": "LNG carrier ( >= 65,000 DWT & < 100,000 )",
+          "year": "2024",
+          "reductionRate": 7,
+          "imoNumber": "9947598",
+          "vesselName": "Puteri Ledang"
+        },
+        "result": {
+          "attainedCII": "0.06",
+          "requiredCII": "6.98",
+          "reductionRate": "7%",
+          "ratio": "0.01",
+          "rating": "A",
+          "totalCO2": "934.2"
+        },
+        "timestamp": 1766472747131
+      },
+      {
+        "type": "CII",
+        "input": {
+          "dwt": 93414,
+          "distance": 160000,
+          "fuelList": [
+            {
+              "class": "Fossil",
+              "type": "LNG Otto (medium speed)",
+              "amount": 300,
+              "scope": 1
+            }
+          ],
+          "shipType": "LNG carrier ( >= 65,000 DWT & < 100,000 )",
+          "year": "2024",
+          "reductionRate": 7,
+          "imoNumber": "9947598",
+          "vesselName": "Puteri Ledang"
+        },
+        "result": {
+          "attainedCII": "0.06",
+          "requiredCII": "6.98",
+          "reductionRate": "7%",
+          "ratio": "0.01",
+          "rating": "A",
+          "totalCO2": "825.0"
+        },
+        "timestamp": 1766471913202
+      },
+      {
+        "type": "CII",
+        "input": {
+          "dwt": 93414,
+          "distance": 160000,
+          "fuelList": [
+            {
+              "class": "Fossil",
+              "type": "LNG Otto (medium speed)",
+              "amount": 300,
+              "scope": 1
+            }
+          ],
+          "shipType": "LNG carrier ( >= 65,000 DWT & < 100,000 )",
+          "year": "2024",
+          "reductionRate": 7,
+          "imoNumber": "9947598",
+          "vesselName": "Puteri Ledang"
+        },
+        "result": {
+          "attainedCII": "0.06",
+          "requiredCII": "6.98",
+          "reductionRate": "7%",
+          "ratio": "0.01",
+          "rating": "A",
+          "totalCO2": "825.0"
+        },
+        "timestamp": 1766471107290
+      }
+    ]
   }
 }

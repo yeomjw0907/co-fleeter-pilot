@@ -55,6 +55,11 @@ function loadJSON(filePath, defaultValue) {
 }
 
 function saveJSON(filePath, data) {
+    // Skip file writes in production (Vercel uses read-only filesystem)
+    if (process.env.NODE_ENV === 'production') {
+        return true; // MongoDB will handle persistence
+    }
+    
     try {
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
         return true;

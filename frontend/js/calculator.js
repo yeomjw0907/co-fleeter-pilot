@@ -95,7 +95,9 @@ class CalculatorService {
                         intensity: match['WtW'] || match['WtW (CO2eq)'] || 0,
                         lcv: match['LCV'] || 0,
                         cSlip: match['C slip'] || 0,
-                        wtt: match['WtT (CO2eq)'] || 0
+                        wtt: match['WtT (CO2eq)'] || 0,
+                        cf_ch4: match['cf_ch4'],
+                        cf_n2o: match['cf_n2o']
                     };
                 }
             }
@@ -163,13 +165,29 @@ class CalculatorService {
      * Helper to calculate Total CO2
      * @param {Array} fuelList [{ type, amount, scope, class }]
      * @param {Boolean} useScope 
-     * @param {Boolean} applySlip If true, applies LNG Slip logic (Subtract slip from consumption, Add GWP*Slip)
+     * @param {Boolean} applySlip If true, applies LNG Slip logic & CH4/N2O (ETS Mode)
      */
     _calculateTotalCO2(fuelList, useScope = false, applySlip = false) {
         const GWP_CH4 = 25; // Global Warming Potential for Methane
+        const GWP_N2O = 298; // Global Warming Potential for Nitrous Oxide
 
         return fuelList.reduce((sum, item) => {
-            const factor = parseFloat(this._getCO2Factor(item.type, item.class));
+            const factorCO2 = parseFloat(this._getCO2Factor(item.type, item.class));
+            const details = this._getFuelDetails(item.type, item.class);
+
+            // Default factors if not yet in details
+            let factorCH4 = details.cf_ch4 !== undefined ? details.cf_ch4 : 0.00005;
+            let factorN2O = details.cf_n2o !== undefined ? details.cf_n2o : 0.00018;
+
+            // Adjust defaults logic solely for calculation safety type checks
+            const lowerType = (item.type || '').toLowerCase();
+            if (lowerType.includes('lng')) {
+                if (details.cf_ch4 === undefined) factorCH4 = 0;
+                if (details.cf_n2o === undefined) factorN2O = 0.00011;
+            } else if (lowerType.includes('methanol')) {
+                if (details.cf_ch4 === undefined) factorCH4 = 0;
+                if (details.cf_n2o === undefined) factorN2O = 0;
+            }
 
             // Determine Amount
             let amount = 0;
@@ -182,32 +200,47 @@ class CalculatorService {
                 amount = item.amount * scopeMultiplier;
             }
 
-            // Apply LNG Slip Logic if requested
+            let co2ForFuel = 0;
+            let ch4ForFuel = 0;
+            let n2oForFuel = 0;
+
+            // Apply ETS / GWP Logic
             if (applySlip) {
-                const details = this._getFuelDetails(item.type, item.class);
-                const cSlipPercent = parseFloat(details.cSlip || 0);
-
-                if (cSlipPercent > 0) {
-                    // LNG Logic:
-                    // 1. Methane Slip Mass = Fuel Amount * (C_slip / 100)
+                // If LNG Slip is present
+                if (details.cSlip > 0) {
+                    const cSlipPercent = parseFloat(details.cSlip || 0);
+                    // 1. Methane Slip Mass
                     const slipMass = amount * (cSlipPercent / 100);
-
-                    // 2. Combusted Mass = Fuel Amount - Slip Mass
+                    // 2. Combusted Mass
                     const combustedMass = amount - slipMass;
 
                     // 3. CO2 from Combustion
-                    const co2Combustion = combustedMass * factor;
+                    co2ForFuel = combustedMass * factorCO2;
 
-                    // 4. CO2eq from Slip (Slip * GWP)
-                    const co2eqSlip = slipMass * GWP_CH4;
+                    // 4. CH4 Slope (GWP)
+                    ch4ForFuel = slipMass * GWP_CH4;
 
-                    return sum + co2Combustion + co2eqSlip;
+                    // 5. N2O from Combustion
+                    n2oForFuel = combustedMass * factorN2O * GWP_N2O;
+
+                } else {
+                    // Standard Fuels (HFO/LFO/MGO)
+                    co2ForFuel = amount * factorCO2;
+                    ch4ForFuel = amount * factorCH4 * GWP_CH4;
+                    n2oForFuel = amount * factorN2O * GWP_N2O;
                 }
+            } else {
+                // Legacy / CII (CO2 only)
+                co2ForFuel = amount * factorCO2;
             }
 
-            // Standard Calculation
-            return sum + (amount * factor);
-        }, 0);
+            return {
+                total: sum.total + co2ForFuel + ch4ForFuel + n2oForFuel,
+                co2: sum.co2 + co2ForFuel,
+                ch4: sum.ch4 + ch4ForFuel,
+                n2o: sum.n2o + n2oForFuel
+            };
+        }, { total: 0, co2: 0, ch4: 0, n2o: 0 });
     }
 
     /**
@@ -238,7 +271,8 @@ class CalculatorService {
      * Calculate CII
      */
     calculateCII(dwt, distance, fuelList, shipType, year = '2024') {
-        const totalCO2 = this._calculateTotalCO2(fuelList, false); // useScope = false for CII
+        const emissionCalcs = this._calculateTotalCO2(fuelList, false);
+        const totalCO2 = emissionCalcs.total; // For CII, total is CO2 if applySlip is false (legacy behavior preserved)
 
         if (dwt <= 0 || distance <= 0) return { rating: 'N/A', score: 0 };
 
@@ -257,12 +291,27 @@ class CalculatorService {
 
         const reduction = this.getReductionFactor(year);
 
+        // Capacity Correction Logic (Ceiling/Floor application per IMO G2 Guidelines)
+        let calculationCapacity = dwt;
+        const typeLower = shipType.toLowerCase();
+
+        // 1. Bulk Carrier >= 279,000 DWT: Cap at 279,000
+        if (typeLower.includes('bulk carrier') && dwt >= 279000) {
+            calculationCapacity = 279000;
+        }
+        // 2. LNG Carrier < 65,000 DWT: Floor at 65,000 (Note: User request says "reflect 65,000")
+        // IMO Guidelines usually say for < 65k, use specific a/c. But if user wants to use same formula but with fixed capacity:
+        else if (typeLower.includes('lng carrier') && dwt < 65000) {
+            calculationCapacity = 65000;
+        }
+        // 3. Ro-ro cargo (vehicle carrier) >= 57,700 GT: Cap/Fix at 57,700
+        // Note: Input is 'dwt'. Assuming user enters GT in the DWT field for Ro-Ro as permitted by app logic.
+        else if (typeLower.includes('vehicle') && dwt >= 57700) {
+            calculationCapacity = 57700;
+        }
+
         // Reference CII = a * Capacity^(-c)
-        // Note: For some types, capacity is GT (Ro-ro), but app uses DWT. 
-        // We will assume DWT input is used as Capacity proxy or prompt user.
-        // User image says "Capacity" column. Usually DWT for cargo, GT for passenger/ro-ro.
-        // Current input only has DWT. We will use DWT.
-        const referenceCII = ref.a * Math.pow(dwt, -ref.c);
+        const referenceCII = ref.a * Math.pow(calculationCapacity, -ref.c);
 
         // Required CII = (100 - Z) / 100 * Reference
         const requiredCII = ((100 - reduction) / 100) * referenceCII;
@@ -347,7 +396,6 @@ class CalculatorService {
             // Logic for Vehicle Carriers OR Small Ro-Ro (<30k) which share usage of "Vehicle" logic usually?
             // Re-reading table: Ro-ro cargo (<30k GT) is 330, 0.329.
             // Vehicle Carrier (all sizes) shares 3627, 0.59 EXCEPT < 30k Vehicle which is 330, 0.329?
-
             // If string contains "< 30,000":
             if (t.includes('< 30,000') || size < 30000) {
                 ref = { a: 330, c: 0.329, d: [0.86, 0.94, 1.06, 1.16] };
@@ -376,7 +424,8 @@ class CalculatorService {
     calculateETS(fuelList, year, euaPrice) {
         // ETS uses Scope (50% for Voyage, 100% for Port)
         // Also apply LNG Slip Logic for EU Regulations
-        const totalScopedCO2 = this._calculateTotalCO2(fuelList, true, true);
+        const emissions = this._calculateTotalCO2(fuelList, true, true);
+        const totalScopedCO2 = emissions.total;
 
         const phaseInMap = {
             '2024': 0.40, '2025': 0.70, '2026': 1.00, '2030': 1.00
@@ -393,7 +442,12 @@ class CalculatorService {
                 totalCO2: totalScopedCO2.toFixed(1), // Display Scoped Total
                 payableCO2: payableCO2.toFixed(1),
                 phaseIn: (phaseIn * 100) + '%',
-                estimatedCost: estimatedCost.toFixed(2)
+                estimatedCost: estimatedCost.toFixed(2),
+
+                // Detailed Emissions for Reference
+                'CO2 (CO2e)': emissions.co2.toFixed(1) + ' mT',
+                'CH4 (CO2e)': emissions.ch4.toFixed(1) + ' mT',
+                'N2O (CO2e)': emissions.n2o.toFixed(1) + ' mT'
             },
             timestamp: Date.now()
         };
@@ -405,7 +459,8 @@ class CalculatorService {
 
     calculateEU(fuelList, year, euaPrice) {
         // --- Part 1: ETS Calculation ---
-        const totalScopedCO2 = this._calculateTotalCO2(fuelList, true, true);
+        const emissions = this._calculateTotalCO2(fuelList, true, true);
+        const totalScopedCO2 = emissions.total;
 
         const phaseInMap = {
             '2024': 0.40, '2025': 0.70, '2026': 1.00, '2030': 1.00
@@ -523,7 +578,12 @@ class CalculatorService {
                 'FuelEU Target': target.toFixed(2),
                 'Actual Intensity': actualIntensity.toFixed(2),
                 'Compliance Bal.': (balance / 1000000).toFixed(1) + ' mT CO2eq', // Convert g to mT for readable balance
-                'FuelEU Status': balance >= 0 ? 'Surplus (OK)' : 'Deficit (Penalty)'
+                'FuelEU Status': balance >= 0 ? 'Surplus (OK)' : 'Deficit (Penalty)',
+
+                // Detailed Breakdown
+                'CO2 Only': emissions.co2.toFixed(1) + ' mT',
+                'CH4 (CO2e)': emissions.ch4.toFixed(1) + ' mT',
+                'N2O (CO2e)': emissions.n2o.toFixed(1) + ' mT'
             },
             timestamp: Date.now()
         };
