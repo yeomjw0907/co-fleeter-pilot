@@ -165,3 +165,4 @@ https://cofleeter-xxxxx.vercel.app
 4. ⬜ 커스텀 도메인 연결 (선택)
 5. ⬜ 이메일 서비스 설정 (Nodemailer → SendGrid 등)
 
+

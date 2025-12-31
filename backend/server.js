@@ -51,36 +51,79 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// --- Initialization & Start ---
-(async () => {
-    // 1. Load Data (File + Optional Mongo)
-    await store.loadAll();
+// --- Global initialization flag ---
+let isInitialized = false;
+let initPromise = null;
 
-    // 2. Init Services
-    emailService.init();
+async function initialize() {
+    if (isInitialized) return;
+    if (initPromise) return initPromise;
+    
+    initPromise = (async () => {
+        try {
+            console.log('🔄 Initializing Co-Fleeter Backend...');
+            
+            // 1. Load Data (File + Optional Mongo)
+            await store.loadAll();
+            console.log('✅ Data loaded');
 
-    // 3. Background Sync
-    dataService.syncEUASheetData()
-        .then(() => console.log("Initial EUA Sync Complete"))
-        .catch(err => console.error("Initial EUA Sync Failed", err));
+            // 2. Init Services
+            emailService.init();
+            console.log('✅ Email service initialized');
 
-    // --- Routes Mounting ---
-    app.use('/api/auth', authRoutes);
-    app.use('/api/trading', tradingRoutes);
-    app.use('/api/admin', adminRoutes);
-    app.use('/api/pooling', poolingRoutes);
-    app.use('/api', apiRoutes);
+            // 3. Background Sync (non-blocking)
+            dataService.syncEUASheetData()
+                .then(() => console.log("✅ Initial EUA Sync Complete"))
+                .catch(err => console.error("⚠️ Initial EUA Sync Failed", err));
 
-    // --- Start Server ---
-    if (process.env.NODE_ENV !== 'production') {
+            isInitialized = true;
+            console.log('✅ Co-Fleeter Backend initialized successfully');
+        } catch (error) {
+            console.error('❌ Initialization error:', error);
+            initPromise = null; // Reset on error
+            throw error;
+        }
+    })();
+    
+    return initPromise;
+}
+
+// --- Middleware to ensure initialization (BEFORE routes) ---
+app.use(async (req, res, next) => {
+    if (!isInitialized) {
+        try {
+            await initialize();
+        } catch (error) {
+            return res.status(500).json({ 
+                success: false, 
+                message: 'Server initialization failed',
+                error: error.message 
+            });
+        }
+    }
+    next();
+});
+
+// --- Routes Mounting ---
+app.use('/api/auth', authRoutes);
+app.use('/api/trading', tradingRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/pooling', poolingRoutes);
+app.use('/api', apiRoutes);
+
+// --- Start Server (Development Only) ---
+if (process.env.NODE_ENV !== 'production') {
+    (async () => {
+        await initialize();
         app.listen(PORT, () => {
             console.log(`Co-Fleeter Backend running on port ${PORT}`);
             console.log(`Make sure to run frontend on http://localhost:3000 or open index.html`);
         });
-    } else {
-        console.log('✅ Co-Fleeter Backend initialized for Vercel Serverless');
-    }
-})();
+    })();
+} else {
+    // Initialize on first import in production
+    initialize().catch(err => console.error('Failed to initialize:', err));
+}
 
 // Export for Vercel Serverless Functions
 module.exports = app;
