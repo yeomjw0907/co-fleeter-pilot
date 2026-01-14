@@ -4,12 +4,28 @@ const logService = require('../services/logService');
 
 exports.login = (req, res) => {
     try {
-        // Check if db is initialized
-        if (!db || !db.users) {
-            console.error('[LOGIN ERROR] Database not initialized');
+        // Ensure db.users exists (create if not)
+        if (!db) {
+            console.error('[LOGIN ERROR] Database object not available');
             return res.status(500).json({ 
                 success: false, 
-                message: 'Server not ready. Please try again in a moment.'
+                message: 'Server error. Please try again.'
+            });
+        }
+        
+        if (!Array.isArray(db.users)) {
+            console.warn('[LOGIN WARNING] db.users is not an array, initializing...');
+            db.users = [];
+            // Ensure admin user exists
+            const { DEFAULT_ROLE_PERMISSIONS } = require('../config/constants');
+            db.users.push({
+                id: 'admin_cf',
+                role: 'ADMIN',
+                email: 'cfadmin@cofleeter.com',
+                password: '1234',
+                name: 'Super Admin',
+                company: 'Co-Fleeter',
+                permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN
             });
         }
         

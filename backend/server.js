@@ -154,34 +154,32 @@ app.use(async (req, res, next) => {
             return next();
         }
         
+        // Start initialization if not started (non-blocking)
         if (!isInitialized && !initPromise) {
-            // Start initialization
-            initPromise = initialize();
+            initPromise = initialize().catch(err => {
+                console.error('Initialization error (non-blocking):', err.message);
+                isInitialized = false;
+                initPromise = null;
+                // Ensure admin user exists even if initialization failed
+                _ensureAdminAndTraders();
+                return false;
+            });
         }
         
-        // Wait for initialization to complete if it's in progress (with timeout)
-        if (initPromise && !isInitialized) {
+        // For API routes, wait briefly for initialization (max 3 seconds)
+        if (req.path.startsWith('/api') && initPromise && !isInitialized) {
             try {
-                const result = await Promise.race([
+                await Promise.race([
                     initPromise,
-                    new Promise((resolve) => setTimeout(() => resolve(false), 5000)) // 5초 타임아웃
+                    new Promise((resolve) => setTimeout(() => resolve(false), 3000)) // 3초만 대기
                 ]);
-                
-                if (result === false) {
-                    // Initialization failed or timed out, but server can still work with defaults
-                    console.warn('Initialization incomplete, but server is operational with defaults');
-                    // Ensure admin user exists as fallback
-                    _ensureAdminAndTraders();
-                }
             } catch (error) {
                 console.error('Initialization error in middleware:', error.message);
-                // Don't block requests - allow server to work with defaults
-                // Ensure admin user exists
-                _ensureAdminAndTraders();
+                // Continue anyway
             }
         }
         
-        // Always allow requests to proceed (even if initialization failed)
+        // Always allow requests to proceed
         // Controllers will handle the case when db is not fully initialized
         next();
     } catch (error) {
