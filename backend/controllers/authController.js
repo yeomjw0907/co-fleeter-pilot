@@ -3,22 +3,46 @@ const { DEFAULT_ROLE_PERMISSIONS } = require('../config/constants');
 const logService = require('../services/logService');
 
 exports.login = (req, res) => {
-    const { email, password } = req.body;
-    console.log(`[LOGIN ATTEMPT] Email: ${email}`);
+    try {
+        const { email, password } = req.body;
+        
+        if (!email || !password) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Email and password are required' 
+            });
+        }
+        
+        console.log(`[LOGIN ATTEMPT] Email: ${email}`);
 
-    const user = db.users.find(u => u.email === email && u.password === password);
+        const user = db.users.find(u => u.email === email && u.password === password);
 
-    if (user) {
-        console.log(`[LOGIN SUCCESS] User: ${user.name} (${user.role})`);
-        const { password, ...safeUser } = user;
+        if (user) {
+            console.log(`[LOGIN SUCCESS] User: ${user.name} (${user.role})`);
+            const { password: pwd, ...safeUser } = user;
 
-        // Log Access
-        logService.logAccess(user, req.ip);
+            // Log Access
+            try {
+                logService.logAccess(user, req.ip);
+            } catch (logError) {
+                console.error('Log access error:', logError);
+            }
 
-        res.json({ success: true, user: safeUser });
-    } else {
-        console.log(`[LOGIN FAILED] Invalid credentials for ${email}`);
-        res.status(401).json({ success: false, message: '아이디(Email) 또는 비밀번호가 일치하지 않습니다.' });
+            return res.json({ success: true, user: safeUser });
+        } else {
+            console.log(`[LOGIN FAILED] Invalid credentials for ${email}`);
+            return res.status(401).json({ 
+                success: false, 
+                message: '아이디(Email) 또는 비밀번호가 일치하지 않습니다.' 
+            });
+        }
+    } catch (error) {
+        console.error('[LOGIN ERROR]', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Server error during login',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

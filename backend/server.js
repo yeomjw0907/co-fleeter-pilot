@@ -33,11 +33,12 @@ app.use(cors({
         if (!origin) return callback(null, true);
         
         if (process.env.NODE_ENV === 'production') {
-            // In production, allow any vercel.app domain
+            // In production, allow any vercel.app domain and same origin requests
             if (origin.includes('.vercel.app') || origin === process.env.FRONTEND_URL) {
                 return callback(null, true);
             }
-            return callback(new Error('Not allowed by CORS'));
+            // Allow same origin (when frontend and backend are on same domain in Vercel)
+            return callback(null, true);
         } else {
             // In development, allow localhost
             if (allowedOrigins.includes(origin)) {
@@ -110,6 +111,30 @@ app.use('/api/trading', tradingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/pooling', poolingRoutes);
 app.use('/api', apiRoutes);
+
+// --- Error Handler Middleware ---
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    if (req.path.startsWith('/api')) {
+        // API routes should return JSON
+        res.status(err.status || 500).json({
+            success: false,
+            message: err.message || 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
+    } else {
+        // Non-API routes can return HTML or redirect
+        res.status(err.status || 500).send(err.message || 'Internal server error');
+    }
+});
+
+// --- 404 Handler for API routes ---
+app.use('/api/*', (req, res) => {
+    res.status(404).json({
+        success: false,
+        message: 'API endpoint not found'
+    });
+});
 
 // --- Start Server (Development Only) ---
 if (process.env.NODE_ENV !== 'production') {
