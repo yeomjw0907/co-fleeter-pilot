@@ -99,22 +99,46 @@ app.use(async (req, res, next) => {
         return next();
     }
     
-    if (!isInitialized) {
+    if (!isInitialized && !initPromise) {
+        // Start initialization but don't wait for it
+        initPromise = initialize().catch(err => {
+            console.error('❌ Initialization error:', err);
+            console.error('Error message:', err.message);
+            console.error('Error stack:', err.stack);
+            isInitialized = false;
+            initPromise = null;
+        });
+    }
+    
+    // Wait for initialization to complete if it's in progress
+    if (initPromise && !isInitialized) {
         try {
-            await initialize();
+            await initPromise;
         } catch (error) {
             console.error('Initialization failed in middleware:', error);
             // Always return JSON for API routes
             if (req.path.startsWith('/api')) {
                 return res.status(500).json({ 
                     success: false, 
-                    message: 'Server initialization failed',
-                    error: process.env.NODE_ENV === 'production' ? 'Please check server logs' : error.message 
+                    message: 'Server initialization failed. Please try again in a moment.',
+                    error: process.env.NODE_ENV === 'development' ? error.message : undefined
                 });
             }
             return res.status(500).send('Server initialization failed');
         }
     }
+    
+    // If still not initialized after waiting, return error
+    if (!isInitialized) {
+        if (req.path.startsWith('/api')) {
+            return res.status(503).json({ 
+                success: false, 
+                message: 'Server is initializing. Please try again in a moment.'
+            });
+        }
+        return res.status(503).send('Server is initializing');
+    }
+    
     next();
 });
 
@@ -159,12 +183,9 @@ if (process.env.NODE_ENV !== 'production') {
         });
     })();
 } else {
-    // Initialize on first import in production (non-blocking)
-    initialize().catch(err => {
-        console.error('❌ Failed to initialize in production:', err);
-        console.error('Error details:', err.message);
-        console.error('Stack:', err.stack);
-    });
+    // In production, don't initialize on import
+    // Let it initialize on first request via middleware
+    console.log('✅ Co-Fleeter Backend loaded for Vercel Serverless');
 }
 
 // Export for Vercel Serverless Functions

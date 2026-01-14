@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const paths = require('../config/paths');
 const { INITIAL_CII_CONSTANTS } = require('../config/constants');
 const { DEFAULT_ROLE_PERMISSIONS } = require('../config/constants');
@@ -61,10 +62,21 @@ function saveJSON(filePath, data) {
     }
     
     try {
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        // Check if file exists and is writable
+        if (fs.existsSync(filePath)) {
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        } else {
+            // Try to create directory if it doesn't exist
+            const dir = path.dirname(filePath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        }
         return true;
     } catch (e) {
-        console.error(`Failed to save ${filePath}`, e);
+        // Don't throw error, just log it
+        console.warn(`Failed to save ${filePath} (this is OK in production):`, e.message);
         return false;
     }
 }
@@ -107,36 +119,46 @@ async function loadAll() {
     db.trades = loadJSON(paths.TRADES_FILE, []);
     db.pools = loadJSON(paths.POOLS_FILE, []);
 
-    // 2. Try MongoDB Connection
-    if (process.env.MONGO_URI) {
-        console.log("Connecting to MongoDB...");
-        const connected = await mongo.connectDB(process.env.MONGO_URI);
-        if (connected) {
-            console.log("Syncing data from MongoDB...");
+        // 2. Try MongoDB Connection
+        if (process.env.MONGO_URI) {
+            console.log("Connecting to MongoDB...");
             try {
-                // Fetch All Globals
-                const globals = await mongo.GlobalData.find({});
-                globals.forEach(doc => {
-                    const k = doc.key;
-                    if (k === 'users') db.users = doc.data; // Using Global for users too to avoid schema conflicts in hybrid
-                    else if (k === 'fleets') db.fleets = doc.data;
-                    else if (k === 'fuelData') db.fuelData = doc.data;
-                    else if (k === 'euData') db.euData = doc.data;
-                    else if (k === 'ciiConstants') db.ciiConstants = doc.data;
-                    else if (k === 'euaManualData') db.euaManualData = doc.data;
-                    else if (k === 'userData') db.userData = doc.data;
-                    else if (k === 'traderContacts') db.traderContacts = doc.data;
-                    else if (k === 'orders') db.orders = doc.data;
-                    else if (k === 'trades') db.trades = doc.data;
-                    else if (k === 'pools') db.pools = doc.data;
-                    else if (k === 'emailConfig') db.emailConfig = doc.data;
-                });
-                console.log("MongoDB Sync Complete.");
-            } catch (e) {
-                console.error("MongoDB Sync Failed", e);
+                const connected = await mongo.connectDB(process.env.MONGO_URI);
+                if (connected) {
+                    console.log("Syncing data from MongoDB...");
+                    try {
+                        // Fetch All Globals
+                        const globals = await mongo.GlobalData.find({});
+                        globals.forEach(doc => {
+                            const k = doc.key;
+                            if (k === 'users') db.users = doc.data; // Using Global for users too to avoid schema conflicts in hybrid
+                            else if (k === 'fleets') db.fleets = doc.data;
+                            else if (k === 'fuelData') db.fuelData = doc.data;
+                            else if (k === 'euData') db.euData = doc.data;
+                            else if (k === 'ciiConstants') db.ciiConstants = doc.data;
+                            else if (k === 'euaManualData') db.euaManualData = doc.data;
+                            else if (k === 'userData') db.userData = doc.data;
+                            else if (k === 'traderContacts') db.traderContacts = doc.data;
+                            else if (k === 'orders') db.orders = doc.data;
+                            else if (k === 'trades') db.trades = doc.data;
+                            else if (k === 'pools') db.pools = doc.data;
+                            else if (k === 'emailConfig') db.emailConfig = doc.data;
+                        });
+                        console.log("MongoDB Sync Complete.");
+                    } catch (e) {
+                        console.error("MongoDB Sync Failed", e);
+                        // Don't throw, continue with defaults
+                    }
+                } else {
+                    console.warn("MongoDB connection failed, using defaults");
+                }
+            } catch (mongoError) {
+                console.error("MongoDB connection error:", mongoError.message);
+                // Don't throw, continue with defaults
             }
+        } else {
+            console.warn("MONGO_URI not set, using in-memory defaults");
         }
-    }
 
 
     // Rebuild Volume Cache
@@ -164,45 +186,69 @@ async function loadAll() {
 
 
 function _ensureAdminAndTraders() {
-    // Ensure Admin
-    let adminUser = db.users.find(u => u.email === 'cfadmin@cofleeter.com');
-    if (!adminUser) {
-        adminUser = {
-            id: 'admin_cf',
-            role: 'ADMIN',
-            email: 'cfadmin@cofleeter.com',
-            password: '1234',
-            name: 'Super Admin',
-            company: 'Co-Fleeter',
-            permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN
-        };
-        db.users.unshift(adminUser);
-        saveJSON(paths.USERS_FILE, db.users);
-        console.log("Store: Restored admin user.");
-    }
-
-    // Ensure Traders
-    const traders = [
-        { id: 'trader_a', email: 'atrader@cofleeter.com', name: 'A Trader' },
-        { id: 'trader_b', email: 'btrader@cofleeter.com', name: 'B Trader' },
-        { id: 'trader_c', email: 'ctrader@cofleeter.com', name: 'C Trader' }
-    ];
-    let tradersAdded = false;
-    traders.forEach(t => {
-        if (!db.users.find(u => u.email === t.email)) {
-            db.users.push({
-                id: t.id,
-                role: 'TRADER',
-                email: t.email,
-                password: '1234',
-                name: t.name,
-                company: 'Co-Fleeter Traders',
-                permissions: DEFAULT_ROLE_PERMISSIONS.TRADER
-            });
-            tradersAdded = true;
+    try {
+        // Ensure users array exists
+        if (!Array.isArray(db.users)) {
+            db.users = [];
         }
-    });
-    if (tradersAdded) saveJSON(paths.USERS_FILE, db.users);
+        
+        // Ensure Admin
+        let adminUser = db.users.find(u => u.email === 'cfadmin@cofleeter.com');
+        if (!adminUser) {
+            adminUser = {
+                id: 'admin_cf',
+                role: 'ADMIN',
+                email: 'cfadmin@cofleeter.com',
+                password: '1234',
+                name: 'Super Admin',
+                company: 'Co-Fleeter',
+                permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN
+            };
+            db.users.unshift(adminUser);
+            if (process.env.NODE_ENV !== 'production') {
+                saveJSON(paths.USERS_FILE, db.users);
+            }
+            // Save to MongoDB if connected
+            if (process.env.MONGO_URI && mongo.mongoose && mongo.mongoose.connection.readyState === 1) {
+                saveToMongo('users', db.users).catch(err => console.error('Failed to save users to MongoDB:', err));
+            }
+            console.log("Store: Restored admin user.");
+        }
+
+        // Ensure Traders
+        const traders = [
+            { id: 'trader_a', email: 'atrader@cofleeter.com', name: 'A Trader' },
+            { id: 'trader_b', email: 'btrader@cofleeter.com', name: 'B Trader' },
+            { id: 'trader_c', email: 'ctrader@cofleeter.com', name: 'C Trader' }
+        ];
+        let tradersAdded = false;
+        traders.forEach(t => {
+            if (!db.users.find(u => u.email === t.email)) {
+                db.users.push({
+                    id: t.id,
+                    role: 'TRADER',
+                    email: t.email,
+                    password: '1234',
+                    name: t.name,
+                    company: 'Co-Fleeter Traders',
+                    permissions: DEFAULT_ROLE_PERMISSIONS.TRADER
+                });
+                tradersAdded = true;
+            }
+        });
+        if (tradersAdded) {
+            if (process.env.NODE_ENV !== 'production') {
+                saveJSON(paths.USERS_FILE, db.users);
+            }
+            // Save to MongoDB if connected
+            if (process.env.MONGO_URI && mongo.mongoose && mongo.mongoose.connection.readyState === 1) {
+                saveToMongo('users', db.users).catch(err => console.error('Failed to save users to MongoDB:', err));
+            }
+        }
+    } catch (error) {
+        console.error('Error in _ensureAdminAndTraders:', error);
+        // Don't throw, just log
+    }
 }
 
 
