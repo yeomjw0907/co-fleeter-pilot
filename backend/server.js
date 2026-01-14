@@ -57,7 +57,7 @@ let isInitialized = false;
 let initPromise = null;
 
 async function initialize() {
-    if (isInitialized) return;
+    if (isInitialized) return true;
     if (initPromise) return initPromise;
     
     initPromise = (async () => {
@@ -65,14 +65,24 @@ async function initialize() {
             console.log('🔄 Initializing Co-Fleeter Backend...');
             
             // 1. Load Data (File + Optional Mongo)
-            await store.loadAll();
-            console.log('✅ Data loaded');
+            try {
+                await store.loadAll();
+                console.log('✅ Data loaded');
+            } catch (loadError) {
+                console.error('⚠️ Data load error (continuing with defaults):', loadError.message);
+                // Continue with defaults - ensure admin user exists
+                _ensureAdminAndTraders();
+            }
 
-            // 2. Init Services
-            emailService.init();
-            console.log('✅ Email service initialized');
+            // 2. Init Services (non-critical)
+            try {
+                emailService.init();
+                console.log('✅ Email service initialized');
+            } catch (emailError) {
+                console.warn('⚠️ Email service init failed (non-critical):', emailError.message);
+            }
 
-            // 3. Background Sync (non-blocking)
+            // 3. Background Sync (non-blocking, don't wait)
             dataService.syncEUASheetData()
                 .then(() => console.log("✅ Initial EUA Sync Complete"))
                 .catch(err => console.error("⚠️ Initial EUA Sync Failed", err));
@@ -82,64 +92,110 @@ async function initialize() {
             return true;
         } catch (error) {
             console.error('❌ Initialization error:', error);
+            console.error('Error message:', error.message);
             console.error('Error stack:', error.stack);
             initPromise = null; // Reset on error
             isInitialized = false;
-            throw error;
+            // Don't throw - allow server to continue with defaults
+            // Ensure admin user exists even if initialization failed
+            try {
+                _ensureAdminAndTraders();
+            } catch (e) {
+                console.error('Failed to ensure admin user:', e);
+            }
+            return false; // Return false instead of throwing
         }
     })();
     
     return initPromise;
 }
 
+// Helper function to ensure admin user exists (fallback)
+function _ensureAdminAndTraders() {
+    try {
+        const { db } = require('./models/store');
+        const { DEFAULT_ROLE_PERMISSIONS } = require('./config/constants');
+        
+        if (!db) {
+            console.warn('Database not available for _ensureAdminAndTraders');
+            return;
+        }
+        
+        if (!Array.isArray(db.users)) {
+            db.users = [];
+        }
+        
+        // Ensure Admin
+        let adminUser = db.users.find(u => u.email === 'cfadmin@cofleeter.com');
+        if (!adminUser) {
+            adminUser = {
+                id: 'admin_cf',
+                role: 'ADMIN',
+                email: 'cfadmin@cofleeter.com',
+                password: '1234',
+                name: 'Super Admin',
+                company: 'Co-Fleeter',
+                permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN
+            };
+            db.users.unshift(adminUser);
+            console.log("✅ Admin user ensured");
+        }
+    } catch (error) {
+        console.error('Error in _ensureAdminAndTraders:', error);
+        // Don't throw - this is a fallback function
+    }
+}
+
 // --- Middleware to ensure initialization (BEFORE routes) ---
 app.use(async (req, res, next) => {
-    // Skip initialization check for static files
-    if (req.path.startsWith('/js/') || req.path.startsWith('/css/') || req.path.endsWith('.html') || req.path.endsWith('.ico')) {
-        return next();
-    }
-    
-    if (!isInitialized && !initPromise) {
-        // Start initialization but don't wait for it
-        initPromise = initialize().catch(err => {
-            console.error('❌ Initialization error:', err);
-            console.error('Error message:', err.message);
-            console.error('Error stack:', err.stack);
-            isInitialized = false;
-            initPromise = null;
-        });
-    }
-    
-    // Wait for initialization to complete if it's in progress
-    if (initPromise && !isInitialized) {
-        try {
-            await initPromise;
-        } catch (error) {
-            console.error('Initialization failed in middleware:', error);
-            // Always return JSON for API routes
-            if (req.path.startsWith('/api')) {
-                return res.status(500).json({ 
-                    success: false, 
-                    message: 'Server initialization failed. Please try again in a moment.',
-                    error: process.env.NODE_ENV === 'development' ? error.message : undefined
-                });
-            }
-            return res.status(500).send('Server initialization failed');
+    try {
+        // Skip initialization check for static files
+        if (req.path.startsWith('/js/') || req.path.startsWith('/css/') || req.path.endsWith('.html') || req.path.endsWith('.ico')) {
+            return next();
         }
-    }
-    
-    // If still not initialized after waiting, return error
-    if (!isInitialized) {
+        
+        if (!isInitialized && !initPromise) {
+            // Start initialization
+            initPromise = initialize();
+        }
+        
+        // Wait for initialization to complete if it's in progress (with timeout)
+        if (initPromise && !isInitialized) {
+            try {
+                const result = await Promise.race([
+                    initPromise,
+                    new Promise((resolve) => setTimeout(() => resolve(false), 5000)) // 5초 타임아웃
+                ]);
+                
+                if (result === false) {
+                    // Initialization failed or timed out, but server can still work with defaults
+                    console.warn('Initialization incomplete, but server is operational with defaults');
+                    // Ensure admin user exists as fallback
+                    _ensureAdminAndTraders();
+                }
+            } catch (error) {
+                console.error('Initialization error in middleware:', error.message);
+                // Don't block requests - allow server to work with defaults
+                // Ensure admin user exists
+                _ensureAdminAndTraders();
+            }
+        }
+        
+        // Always allow requests to proceed (even if initialization failed)
+        // Controllers will handle the case when db is not fully initialized
+        next();
+    } catch (error) {
+        console.error('Middleware error:', error);
+        // Always return JSON for API routes
         if (req.path.startsWith('/api')) {
-            return res.status(503).json({ 
+            return res.status(500).json({ 
                 success: false, 
-                message: 'Server is initializing. Please try again in a moment.'
+                message: 'Server error. Please try again.',
+                error: process.env.NODE_ENV === 'development' ? error.message : undefined
             });
         }
-        return res.status(503).send('Server is initializing');
+        next(error);
     }
-    
-    next();
 });
 
 // --- Routes Mounting ---
