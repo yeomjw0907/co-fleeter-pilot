@@ -13,11 +13,29 @@ const GlobalData = mongoose.model('GlobalData', GlobalDataSchema);
 // --- Connection ---
 const connectDB = async (uri) => {
     try {
-        await mongoose.connect(uri);
+        // Check if already connected
+        if (mongoose.connection.readyState === 1) {
+            console.log("MongoDB already connected");
+            return true;
+        }
+        
+        // Connection options for Vercel Serverless
+        const options = {
+            serverSelectionTimeoutMS: 5000, // 5초 타임아웃
+            socketTimeoutMS: 45000,
+            connectTimeoutMS: 5000,
+            maxPoolSize: 1, // Serverless에서는 1개 연결만 사용
+            minPoolSize: 1,
+            bufferMaxEntries: 0, // Disable mongoose buffering
+            bufferCommands: false,
+        };
+        
+        await mongoose.connect(uri, options);
         console.log("MongoDB Connected Successfully");
         return true;
     } catch (e) {
         console.error("MongoDB Connection Error:", e.message);
+        console.error("Error details:", e.name, e.code);
         return false;
     }
 };

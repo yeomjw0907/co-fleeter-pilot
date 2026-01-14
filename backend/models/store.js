@@ -126,16 +126,29 @@ async function loadAll() {
             console.log('Production mode: Skipping file system reads');
         }
 
-        // 2. Try MongoDB Connection
+        // 2. Try MongoDB Connection (with timeout)
         if (process.env.MONGO_URI) {
             console.log("Connecting to MongoDB...");
             try {
-                const connected = await mongo.connectDB(process.env.MONGO_URI);
+                // Add timeout to MongoDB connection
+                const connectionPromise = mongo.connectDB(process.env.MONGO_URI);
+                const timeoutPromise = new Promise((resolve) => 
+                    setTimeout(() => resolve(false), 6000) // 6초 타임아웃
+                );
+                
+                const connected = await Promise.race([connectionPromise, timeoutPromise]);
+                
                 if (connected) {
                     console.log("Syncing data from MongoDB...");
                     try {
-                        // Fetch All Globals
-                        const globals = await mongo.GlobalData.find({});
+                        // Add timeout to data sync
+                        const syncPromise = mongo.GlobalData.find({});
+                        const syncTimeout = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Sync timeout')), 4000)
+                        );
+                        
+                        const globals = await Promise.race([syncPromise, syncTimeout]);
+                        
                         globals.forEach(doc => {
                             const k = doc.key;
                             if (k === 'users') db.users = doc.data; // Using Global for users too to avoid schema conflicts in hybrid
@@ -153,11 +166,11 @@ async function loadAll() {
                         });
                         console.log("MongoDB Sync Complete.");
                     } catch (e) {
-                        console.error("MongoDB Sync Failed", e);
+                        console.error("MongoDB Sync Failed", e.message);
                         // Don't throw, continue with defaults
                     }
                 } else {
-                    console.warn("MongoDB connection failed, using defaults");
+                    console.warn("MongoDB connection failed or timed out, using defaults");
                 }
             } catch (mongoError) {
                 console.error("MongoDB connection error:", mongoError.message);
