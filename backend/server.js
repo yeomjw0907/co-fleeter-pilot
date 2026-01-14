@@ -121,12 +121,13 @@ function _ensureAdminAndTraders() {
             return;
         }
         
-        if (!Array.isArray(db.users)) {
+        // Ensure users array exists
+        if (!db.users || !Array.isArray(db.users)) {
             db.users = [];
         }
         
         // Ensure Admin
-        let adminUser = db.users.find(u => u.email === 'cfadmin@cofleeter.com');
+        let adminUser = db.users.find(u => u && u.email === 'cfadmin@cofleeter.com');
         if (!adminUser) {
             adminUser = {
                 id: 'admin_cf',
@@ -135,13 +136,13 @@ function _ensureAdminAndTraders() {
                 password: '1234',
                 name: 'Super Admin',
                 company: 'Co-Fleeter',
-                permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN
+                permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN || {}
             };
             db.users.unshift(adminUser);
             console.log("✅ Admin user ensured");
         }
     } catch (error) {
-        console.error('Error in _ensureAdminAndTraders:', error);
+        console.error('Error in _ensureAdminAndTraders:', error.message);
         // Don't throw - this is a fallback function
     }
 }
@@ -240,6 +241,12 @@ if (process.env.NODE_ENV !== 'production') {
     // In production, don't initialize on import
     // Let it initialize on first request via middleware
     console.log('✅ Co-Fleeter Backend loaded for Vercel Serverless');
+    // Ensure admin user exists immediately (synchronous, safe)
+    try {
+        _ensureAdminAndTraders();
+    } catch (e) {
+        console.warn('Failed to ensure admin user on load:', e.message);
+    }
 }
 
 // Export for Vercel Serverless Functions
