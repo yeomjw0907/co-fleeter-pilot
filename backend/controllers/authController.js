@@ -4,6 +4,15 @@ const logService = require('../services/logService');
 
 exports.login = (req, res) => {
     try {
+        // Check if db is initialized
+        if (!db || !db.users) {
+            console.error('[LOGIN ERROR] Database not initialized');
+            return res.status(500).json({ 
+                success: false, 
+                message: 'Server not ready. Please try again in a moment.'
+            });
+        }
+        
         const { email, password } = req.body;
         
         if (!email || !password) {
@@ -23,9 +32,10 @@ exports.login = (req, res) => {
 
             // Log Access
             try {
-                logService.logAccess(user, req.ip);
+                logService.logAccess(user, req.ip || 'unknown');
             } catch (logError) {
                 console.error('Log access error:', logError);
+                // Don't fail login if logging fails
             }
 
             return res.json({ success: true, user: safeUser });
@@ -38,6 +48,7 @@ exports.login = (req, res) => {
         }
     } catch (error) {
         console.error('[LOGIN ERROR]', error);
+        console.error('Error stack:', error.stack);
         return res.status(500).json({ 
             success: false, 
             message: 'Server error during login',

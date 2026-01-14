@@ -79,9 +79,12 @@ async function initialize() {
 
             isInitialized = true;
             console.log('✅ Co-Fleeter Backend initialized successfully');
+            return true;
         } catch (error) {
             console.error('❌ Initialization error:', error);
+            console.error('Error stack:', error.stack);
             initPromise = null; // Reset on error
+            isInitialized = false;
             throw error;
         }
     })();
@@ -91,15 +94,25 @@ async function initialize() {
 
 // --- Middleware to ensure initialization (BEFORE routes) ---
 app.use(async (req, res, next) => {
+    // Skip initialization check for static files
+    if (req.path.startsWith('/js/') || req.path.startsWith('/css/') || req.path.endsWith('.html') || req.path.endsWith('.ico')) {
+        return next();
+    }
+    
     if (!isInitialized) {
         try {
             await initialize();
         } catch (error) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Server initialization failed',
-                error: error.message 
-            });
+            console.error('Initialization failed in middleware:', error);
+            // Always return JSON for API routes
+            if (req.path.startsWith('/api')) {
+                return res.status(500).json({ 
+                    success: false, 
+                    message: 'Server initialization failed',
+                    error: process.env.NODE_ENV === 'production' ? 'Please check server logs' : error.message 
+                });
+            }
+            return res.status(500).send('Server initialization failed');
         }
     }
     next();
@@ -146,8 +159,12 @@ if (process.env.NODE_ENV !== 'production') {
         });
     })();
 } else {
-    // Initialize on first import in production
-    initialize().catch(err => console.error('Failed to initialize:', err));
+    // Initialize on first import in production (non-blocking)
+    initialize().catch(err => {
+        console.error('❌ Failed to initialize in production:', err);
+        console.error('Error details:', err.message);
+        console.error('Stack:', err.stack);
+    });
 }
 
 // Export for Vercel Serverless Functions
