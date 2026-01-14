@@ -5,10 +5,10 @@ const UserSchema = new mongoose.Schema({}, { strict: false }); // Store user obj
 const FleetSchema = new mongoose.Schema({ userId: String, ships: Array });
 const GlobalDataSchema = new mongoose.Schema({ key: String, data: mongoose.Schema.Types.Mixed }); // Generic store for single objects like fuelData
 
-// --- Models ---
-const User = mongoose.model('User', UserSchema);
-const Fleet = mongoose.model('Fleet', FleetSchema);
-const GlobalData = mongoose.model('GlobalData', GlobalDataSchema);
+// --- Models (Serverless-safe: reuse existing models to prevent OverwriteModelError) ---
+const User = mongoose.models.User || mongoose.model('User', UserSchema);
+const Fleet = mongoose.models.Fleet || mongoose.model('Fleet', FleetSchema);
+const GlobalData = mongoose.models.GlobalData || mongoose.model('GlobalData', GlobalDataSchema);
 
 // --- Connection ---
 const connectDB = async (uri) => {
