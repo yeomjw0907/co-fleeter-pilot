@@ -96,28 +96,35 @@ async function saveToMongo(key, data) {
 
 // --- Load Logic ---
 async function loadAll() {
-    // 1. Load from Files first (Fastest / Default)
-    db.fuelData = loadJSON(paths.FUEL_DATA_FILE, {});
-    db.euData = loadJSON(paths.EU_DATA_FILE, {});
-    const loadedCii = loadJSON(paths.CII_DATA_FILE, {});
-    if (loadedCii.CII_REDUCTION) db.ciiConstants.CII_REDUCTION = loadedCii.CII_REDUCTION;
-    if (loadedCii.CII_REF) db.ciiConstants.CII_REF = loadedCii.CII_REF;
+    try {
+        // 1. Load from Files first (Fastest / Default)
+        // In production, skip file loading (Vercel read-only filesystem)
+        if (process.env.NODE_ENV !== 'production') {
+            db.fuelData = loadJSON(paths.FUEL_DATA_FILE, {});
+            db.euData = loadJSON(paths.EU_DATA_FILE, {});
+            const loadedCii = loadJSON(paths.CII_DATA_FILE, {});
+            if (loadedCii.CII_REDUCTION) db.ciiConstants.CII_REDUCTION = loadedCii.CII_REDUCTION;
+            if (loadedCii.CII_REF) db.ciiConstants.CII_REF = loadedCii.CII_REF;
 
-    db.users = loadJSON(paths.USERS_FILE, []);
-    db.fleets = loadJSON(paths.FLEETS_FILE, {});
-    db.accessLogs = loadJSON(paths.ACCESS_LOGS_FILE, []);
-    db.euaManualData = loadJSON(paths.EUA_MANUAL_FILE, []);
-    db.euaSheetCache = loadJSON(paths.EUA_SHEET_CACHE_FILE, []);
-    db.userData = loadJSON(paths.USER_DATA_FILE, {});
+            db.users = loadJSON(paths.USERS_FILE, []);
+            db.fleets = loadJSON(paths.FLEETS_FILE, {});
+            db.accessLogs = loadJSON(paths.ACCESS_LOGS_FILE, []);
+            db.euaManualData = loadJSON(paths.EUA_MANUAL_FILE, []);
+            db.euaSheetCache = loadJSON(paths.EUA_SHEET_CACHE_FILE, []);
+            db.userData = loadJSON(paths.USER_DATA_FILE, {});
 
-    const loadedContacts = loadJSON(paths.TRADER_CONTACTS_FILE, {});
-    db.traderContacts = { ...db.traderContacts, ...loadedContacts };
+            const loadedContacts = loadJSON(paths.TRADER_CONTACTS_FILE, {});
+            db.traderContacts = { ...db.traderContacts, ...loadedContacts };
 
-    db.emailConfig = loadJSON(paths.EMAIL_CONFIG_FILE, db.emailConfig);
+            db.emailConfig = loadJSON(paths.EMAIL_CONFIG_FILE, db.emailConfig);
 
-    db.orders = loadJSON(paths.ORDERS_FILE, []);
-    db.trades = loadJSON(paths.TRADES_FILE, []);
-    db.pools = loadJSON(paths.POOLS_FILE, []);
+            db.orders = loadJSON(paths.ORDERS_FILE, []);
+            db.trades = loadJSON(paths.TRADES_FILE, []);
+            db.pools = loadJSON(paths.POOLS_FILE, []);
+        } else {
+            // In production, initialize with empty defaults
+            console.log('Production mode: Skipping file system reads');
+        }
 
         // 2. Try MongoDB Connection
         if (process.env.MONGO_URI) {
@@ -160,28 +167,38 @@ async function loadAll() {
             console.warn("MONGO_URI not set, using in-memory defaults");
         }
 
-
-    // Rebuild Volume Cache
-    db.trades.forEach(t => {
-        if (t.type === 'MATCH' || t.type === 'RFQ_MATCH') {
-            if (!db.executedVolumes[t.symbol]) db.executedVolumes[t.symbol] = {};
-            const pKey = parseFloat(t.price).toFixed(2);
-            db.executedVolumes[t.symbol][pKey] = (db.executedVolumes[t.symbol][pKey] || 0) + t.quantity;
+        // Rebuild Volume Cache
+        if (Array.isArray(db.trades)) {
+            db.trades.forEach(t => {
+                if (t.type === 'MATCH' || t.type === 'RFQ_MATCH') {
+                    if (!db.executedVolumes[t.symbol]) db.executedVolumes[t.symbol] = {};
+                    const pKey = parseFloat(t.price).toFixed(2);
+                    db.executedVolumes[t.symbol][pKey] = (db.executedVolumes[t.symbol][pKey] || 0) + t.quantity;
+                }
+            });
         }
-    });
 
-    // Mock Data init for fresh install if needed (Logic preserved from server.js)
-    if (db.orders.length === 0 && db.trades.length === 0) {
-        db.orders = [
-            { id: 'ord_1', type: 'SELL', symbol: 'EUA', quantity: 5000, price: 85.50, owner: 'Market Maker', timestamp: Date.now() - 100000 },
-            { id: 'ord_2', type: 'BUY', symbol: 'EUA', quantity: 2000, price: 82.00, owner: 'Market Maker', timestamp: Date.now() - 50000 }
-        ];
-        saveJSON(paths.ORDERS_FILE, db.orders);
+        // Mock Data init for fresh install if needed (Logic preserved from server.js)
+        if (db.orders.length === 0 && db.trades.length === 0) {
+            db.orders = [
+                { id: 'ord_1', type: 'SELL', symbol: 'EUA', quantity: 5000, price: 85.50, owner: 'Market Maker', timestamp: Date.now() - 100000 },
+                { id: 'ord_2', type: 'BUY', symbol: 'EUA', quantity: 2000, price: 82.00, owner: 'Market Maker', timestamp: Date.now() - 50000 }
+            ];
+            if (process.env.NODE_ENV !== 'production') {
+                saveJSON(paths.ORDERS_FILE, db.orders);
+            }
+        }
+
+        _ensureAdminAndTraders();
+
+        console.log("Store: All data loaded.");
+    } catch (error) {
+        console.error("Error in loadAll:", error);
+        console.error("Error stack:", error.stack);
+        // Ensure admin user exists even if loading fails
+        _ensureAdminAndTraders();
+        throw error; // Re-throw to let caller handle
     }
-
-    _ensureAdminAndTraders();
-
-    console.log("Store: All data loaded.");
 }
 
 
