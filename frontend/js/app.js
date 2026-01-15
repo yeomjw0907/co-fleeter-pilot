@@ -3215,11 +3215,23 @@ async function renderAdmin() {
     } catch (e) {
         console.error("Failed to fetch admin data", e);
     }
-
+    // Fetch MongoDB connection status for badge
+    let dbStatusBadge = '<span style="background: #555; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; margin-left: 8px;">⏳ Checking...</span>';
+    try {
+        const dbRes = await fetch('/api/admin/db-status');
+        const dbJson = await dbRes.json();
+        if (dbJson.success && dbJson.state === 1) {
+            dbStatusBadge = '<span style="background: #22c55e; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; margin-left: 8px;">🟢 MongoDB Connected</span>';
+        } else {
+            dbStatusBadge = '<span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; margin-left: 8px;">🔴 MongoDB Disconnected</span>';
+        }
+    } catch (e) {
+        dbStatusBadge = '<span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; margin-left: 8px;">🔴 Status Unknown</span>';
+    }
 
     // Admin Container
     contentArea.innerHTML = `
-        <h2 class="text-lg font-bold mb-4">Admin Administration</h2>
+        <h2 class="text-lg font-bold mb-4">Admin Administration ${dbStatusBadge}</h2>
         
         <!-- Admin Tabs -->
         <div class="flex gap-4 mb-6 border-b border-gray-700">
