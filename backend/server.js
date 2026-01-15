@@ -1,5 +1,12 @@
 
-require('dotenv').config();
+// Load dotenv only in development (Vercel injects env vars directly in production)
+try {
+    if (process.env.NODE_ENV !== 'production') {
+        require('dotenv').config();
+    }
+} catch (e) {
+    // dotenv not required in production
+}
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
