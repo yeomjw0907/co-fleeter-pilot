@@ -60,7 +60,7 @@ function saveJSON(filePath, data) {
     if (process.env.NODE_ENV === 'production') {
         return true; // MongoDB will handle persistence
     }
-    
+
     try {
         // Check if file exists and is writable
         if (fs.existsSync(filePath)) {
@@ -132,23 +132,23 @@ async function loadAll() {
             try {
                 // Add timeout to MongoDB connection
                 const connectionPromise = mongo.connectDB(process.env.MONGO_URI);
-                const timeoutPromise = new Promise((resolve) => 
+                const timeoutPromise = new Promise((resolve) =>
                     setTimeout(() => resolve(false), 6000) // 6초 타임아웃
                 );
-                
+
                 const connected = await Promise.race([connectionPromise, timeoutPromise]);
-                
+
                 if (connected) {
                     console.log("Syncing data from MongoDB...");
                     try {
                         // Add timeout to data sync
                         const syncPromise = mongo.GlobalData.find({});
-                        const syncTimeout = new Promise((_, reject) => 
+                        const syncTimeout = new Promise((_, reject) =>
                             setTimeout(() => reject(new Error('Sync timeout')), 4000)
                         );
-                        
+
                         const globals = await Promise.race([syncPromise, syncTimeout]);
-                        
+
                         globals.forEach(doc => {
                             const k = doc.key;
                             if (k === 'users') db.users = doc.data; // Using Global for users too to avoid schema conflicts in hybrid
@@ -221,7 +221,7 @@ function _ensureAdminAndTraders() {
         if (!Array.isArray(db.users)) {
             db.users = [];
         }
-        
+
         // Ensure Admin
         let adminUser = db.users.find(u => u.email === 'cfadmin@cofleeter.com');
         if (!adminUser) {
@@ -311,5 +311,6 @@ const save = {
 module.exports = {
     db,
     loadAll,
-    save
+    save,
+    getStatus: () => (mongo.mongoose ? mongo.mongoose.connection.readyState : 0)
 };

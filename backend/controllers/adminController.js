@@ -1,8 +1,28 @@
-const { db, save } = require('../models/store');
+
+
+const { db, save, getStatus } = require('../models/store');
+const mongoose = require('mongoose'); // Import mongoose directly
 const dataService = require('../services/dataService');
 const emailService = require('../services/emailService');
 const logService = require('../services/logService');
 
+exports.getDbStatus = (req, res) => {
+    let status = 'disconnected';
+    let state = 0;
+
+    // Check via store's getStatus if available (primary) or local mongoose (fallback)
+    if (getStatus) {
+        state = getStatus();
+    } else if (mongoose.connection) {
+        state = mongoose.connection.readyState;
+    }
+
+    // 0: disconnected, 1: connected, 2: connecting, 3: disconnecting
+    if (state === 1) status = 'connected';
+    else if (state === 2) status = 'connecting';
+
+    res.json({ success: true, status, state });
+};
 
 exports.getUsers = (req, res) => {
     const safeUsers = db.users.map(u => {

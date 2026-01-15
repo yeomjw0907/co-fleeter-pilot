@@ -1,3 +1,5 @@
+
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -31,7 +33,7 @@ app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
-        
+
         if (process.env.NODE_ENV === 'production') {
             // In production, allow any vercel.app domain and same origin requests
             if (origin.includes('.vercel.app') || origin === process.env.FRONTEND_URL) {
@@ -59,11 +61,11 @@ let initPromise = null;
 async function initialize() {
     if (isInitialized) return true;
     if (initPromise) return initPromise;
-    
+
     initPromise = (async () => {
         try {
             console.log('🔄 Initializing Co-Fleeter Backend...');
-            
+
             // 1. Load Data (File + Optional Mongo)
             try {
                 await store.loadAll();
@@ -106,7 +108,7 @@ async function initialize() {
             return false; // Return false instead of throwing
         }
     })();
-    
+
     return initPromise;
 }
 
@@ -115,17 +117,17 @@ function _ensureAdminAndTraders() {
     try {
         const { db } = require('./models/store');
         const { DEFAULT_ROLE_PERMISSIONS } = require('./config/constants');
-        
+
         if (!db) {
             console.warn('Database not available for _ensureAdminAndTraders');
             return;
         }
-        
+
         // Ensure users array exists
         if (!db.users || !Array.isArray(db.users)) {
             db.users = [];
         }
-        
+
         // Ensure Admin
         let adminUser = db.users.find(u => u && u.email === 'cfadmin@cofleeter.com');
         if (!adminUser) {
@@ -154,7 +156,7 @@ app.use(async (req, res, next) => {
         if (req.path.startsWith('/js/') || req.path.startsWith('/css/') || req.path.endsWith('.html') || req.path.endsWith('.ico')) {
             return next();
         }
-        
+
         // Start initialization if not started (non-blocking)
         if (!isInitialized && !initPromise) {
             initPromise = initialize().catch(err => {
@@ -166,7 +168,7 @@ app.use(async (req, res, next) => {
                 return false;
             });
         }
-        
+
         // For API routes, wait briefly for initialization (max 3 seconds)
         if (req.path.startsWith('/api') && initPromise && !isInitialized) {
             try {
@@ -179,7 +181,7 @@ app.use(async (req, res, next) => {
                 // Continue anyway
             }
         }
-        
+
         // Always allow requests to proceed
         // Controllers will handle the case when db is not fully initialized
         next();
@@ -187,8 +189,8 @@ app.use(async (req, res, next) => {
         console.error('Middleware error:', error);
         // Always return JSON for API routes
         if (req.path.startsWith('/api')) {
-            return res.status(500).json({ 
-                success: false, 
+            return res.status(500).json({
+                success: false,
                 message: 'Server error. Please try again.',
                 error: process.env.NODE_ENV === 'development' ? error.message : undefined
             });

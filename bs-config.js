@@ -1,23 +1,17 @@
-const { createProxyMiddleware } = require('http-proxy-middleware');
 
-const proxy = createProxyMiddleware({
-    target: 'http://localhost:8000',
-    changeOrigin: true,
-    logLevel: 'debug'
-});
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = {
     port: 3000,
     server: {
-        baseDir: "frontend",
-        middleware: [
-            (req, res, next) => {
-                if (req.url.startsWith('/api')) {
-                    console.log(`[PROXY] Forwarding ${req.url} to backend...`);
-                    return proxy(req, res, next);
-                }
-                next();
-            }
-        ]
-    }
+        baseDir: "./frontend",
+        middleware: {
+            1: createProxyMiddleware({
+                target: 'http://localhost:8000',
+                changeOrigin: true,
+                pathFilter: '/api'
+            })
+        }
+    },
+    files: ["frontend/**/*.{html,htm,css,js}"]
 };

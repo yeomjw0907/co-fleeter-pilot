@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 
+
+router.get('/db-status', adminController.getDbStatus);
 router.get('/users', adminController.getUsers);
 router.post('/update-permissions', adminController.updatePermissions);
 router.post('/reset-password', adminController.resetPassword);

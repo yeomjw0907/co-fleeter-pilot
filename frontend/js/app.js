@@ -3035,14 +3035,16 @@ async function renderAdmin() {
         "Trader C": { name: "", email: "" }
     };
     let emailConfig = { user: '', pass: '' };
+    let dbStatus = { status: 'disconnected' };
 
     try {
-        const [uRes, euRes, manRes, contactRes, emailRes] = await Promise.all([
+        const [uRes, euRes, manRes, contactRes, emailRes, dbRes] = await Promise.all([
             fetch('/api/admin/users'),
             fetch('/api/data/eu-data'),
             fetch('/api/admin/eua-manual'),
             fetch('/api/admin/trader-contacts'),
-            fetch('/api/admin/email-config')
+            fetch('/api/admin/email-config'),
+            fetch('/api/admin/db-status')
         ]);
 
         const uJson = await uRes.json();
@@ -3057,6 +3059,9 @@ async function renderAdmin() {
         const emailJson = await emailRes.json();
         if (emailJson.success) emailConfig = emailJson.config || { user: '', pass: '' };
 
+        const dbJson = await dbRes.json();
+        if (dbJson.success) dbStatus = dbJson;
+
         window.tempEUDataReal = euData; // store for render
     } catch (e) {
         console.error("Failed to fetch admin data", e);
@@ -3065,7 +3070,12 @@ async function renderAdmin() {
 
     // Admin Container
     contentArea.innerHTML = `
-        <h2 class="text-lg font-bold mb-4">Admin Administration</h2>
+        <div class="flex items-center gap-3 mb-4">
+            <h2 class="text-lg font-bold">Admin Administration</h2>
+            <span class="badge ${dbStatus.status === 'connected' ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'} text-xs px-2 py-1 rounded flex items-center gap-1">
+                ${dbStatus.status === 'connected' ? '🟢 MongoDB Connected' : '🔴 MongoDB Disconnected'}
+            </span>
+        </div>
         
         <!-- Admin Tabs -->
         <div class="flex gap-4 mb-6 border-b border-gray-700">
