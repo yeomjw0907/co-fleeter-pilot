@@ -18,18 +18,22 @@ const connectDB = async (uri) => {
             console.log("MongoDB already connected");
             return true;
         }
-        
-        // Connection options for Vercel Serverless
+
+        // Connection options
+        const isProduction = process.env.NODE_ENV === 'production';
         const options = {
-            serverSelectionTimeoutMS: 5000, // 5초 타임아웃
+            serverSelectionTimeoutMS: 5000,
             socketTimeoutMS: 45000,
-            connectTimeoutMS: 5000,
-            maxPoolSize: 1, // Serverless에서는 1개 연결만 사용
-            minPoolSize: 1,
-            bufferMaxEntries: 0, // Disable mongoose buffering
-            bufferCommands: false,
+            family: 4 // Force IPv4
         };
-        
+
+        if (isProduction) {
+            options.maxPoolSize = 1;
+            options.minPoolSize = 1;
+            options.bufferMaxEntries = 0;
+            options.bufferCommands = false;
+        }
+
         await mongoose.connect(uri, options);
         console.log("MongoDB Connected Successfully");
         return true;
@@ -44,5 +48,6 @@ module.exports = {
     connectDB,
     User,
     Fleet,
-    GlobalData
+    GlobalData,
+    mongoose // Export mongoose instance
 };

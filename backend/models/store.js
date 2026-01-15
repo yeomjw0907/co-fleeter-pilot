@@ -127,16 +127,19 @@ async function loadAll() {
         }
 
         // 2. Try MongoDB Connection (with timeout)
+        console.log("DEBUG: Checking Mongo URI:", process.env.MONGO_URI ? "EXISTS" : "MISSING");
         if (process.env.MONGO_URI) {
-            console.log("Connecting to MongoDB...");
+            console.log("Connecting to MongoDB... (URI found)");
+            console.log("URI Start:", process.env.MONGO_URI.substring(0, 15) + "...");
             try {
                 // Add timeout to MongoDB connection
                 const connectionPromise = mongo.connectDB(process.env.MONGO_URI);
                 const timeoutPromise = new Promise((resolve) =>
-                    setTimeout(() => resolve(false), 6000) // 6초 타임아웃
+                    setTimeout(() => resolve(false), 10000) // Increase timeout to 10s for debugging
                 );
 
                 const connected = await Promise.race([connectionPromise, timeoutPromise]);
+                console.log("Connection Result:", connected);
 
                 if (connected) {
                     console.log("Syncing data from MongoDB...");
