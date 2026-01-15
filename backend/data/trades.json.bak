@@ -1,0 +1,123 @@
+[
+  {
+    "id": "trd_17674175878360.9536366275172856",
+    "timestamp": 1767417587836,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 1000,
+    "price": 1000,
+    "buyer": "JOO SUNGJUN",
+    "seller": "Trader #2",
+    "aggressor": "ord_1767417474103lsu2s"
+  },
+  {
+    "id": "trd_17672180191390.9839143896511304",
+    "timestamp": 1767218019139,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 7000,
+    "price": 14000,
+    "buyer": "JOO SUNGJUN",
+    "seller": "A Trader",
+    "aggressor": "ord_1766291710024fvwsw"
+  },
+  {
+    "id": "trd_17671965110200.3602418303246486",
+    "timestamp": 1767196511020,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 1000,
+    "price": 800,
+    "buyer": "junsunhan",
+    "seller": "C Trader",
+    "aggressor": "ord_1767196335857dpbky"
+  },
+  {
+    "id": "trd_17663794933050.1499481018640234",
+    "timestamp": 1766379493305,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 600,
+    "price": 700,
+    "buyer": "junsunhan",
+    "seller": "A Trader",
+    "aggressor": "ord_1766379438437ox0b3"
+  },
+  {
+    "id": "trd_17663118126380.33613715826364676",
+    "timestamp": 1766311812638,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 700,
+    "price": 5000,
+    "buyer": "주성준",
+    "seller": "B Trader",
+    "aggressor": "ord_1766298896036l5d4e"
+  },
+  {
+    "id": "trd_17663024840660.2914958908308205",
+    "timestamp": 1766302484066,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 100,
+    "price": 300,
+    "buyer": "주성준",
+    "seller": "B Trader",
+    "aggressor": "ord_17663012251699h29g"
+  },
+  {
+    "id": "trd_17663022432080.744199649387338",
+    "timestamp": 1766302243208,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 100,
+    "price": 100,
+    "buyer": "주성준",
+    "seller": "A Trader",
+    "aggressor": "ord_1766299836296q7r8h"
+  },
+  {
+    "id": "trd_17662988852800.5037402382391052",
+    "timestamp": 1766298885280,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 100,
+    "price": 200,
+    "buyer": "주성준",
+    "seller": "A Trader",
+    "aggressor": "ord_1766296721113yu8or"
+  },
+  {
+    "id": "trd_17662909676840.1610836975509793",
+    "timestamp": 1766290967684,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 700,
+    "price": 150,
+    "buyer": "JOO SUNGJUN",
+    "seller": "A Trader",
+    "aggressor": "ord_1766290899525su7hz"
+  },
+  {
+    "id": "trd_17662899403830.6228639591798968",
+    "timestamp": 1766289940383,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 900,
+    "price": 200,
+    "buyer": "JOO SUNGJUN",
+    "seller": "B Trader",
+    "aggressor": "ord_1766289872837yqnky"
+  },
+  {
+    "id": "trd_17662896347960.9970010190280092",
+    "timestamp": 1766289634796,
+    "symbol": "EUA",
+    "type": "RFQ_MATCH",
+    "quantity": 1500,
+    "price": 200,
+    "buyer": "JOO SUNGJUN",
+    "seller": "A Trader",
+    "aggressor": "ord_17662895115855xa9k"
+  }
+]

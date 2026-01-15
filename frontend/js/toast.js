@@ -110,3 +110,4 @@ class ToastManager {
 
 // Create global instance
 const toast = new ToastManager();
+window.toast = toast;

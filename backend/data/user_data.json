@@ -5,6 +5,93 @@
         "type": "CII",
         "input": {
           "dwt": 93414,
+          "distance": 1000,
+          "fuelList": [
+            {
+              "class": "Fossil",
+              "type": "ULSFO",
+              "amount": 100,
+              "scope": 1
+            }
+          ],
+          "shipType": "LNG carrier ( >= 100,000 DWT)",
+          "year": "2024",
+          "reductionRate": 7,
+          "imoNumber": "999999",
+          "vesselName": "PSD"
+        },
+        "result": {
+          "attainedCII": "3.33",
+          "requiredCII": "6.98",
+          "reductionRate": "7%",
+          "ratio": "0.48",
+          "rating": "A",
+          "totalCO2": "311.4"
+        },
+        "timestamp": 1767200645571
+      },
+      {
+        "type": "CII",
+        "input": {
+          "dwt": 93414,
+          "distance": 100,
+          "fuelList": [
+            {
+              "class": "Fossil",
+              "type": "ULSFO",
+              "amount": 100,
+              "scope": 1
+            }
+          ],
+          "shipType": "LNG carrier ( >= 100,000 DWT)",
+          "year": "2024",
+          "reductionRate": 7,
+          "imoNumber": "999999",
+          "vesselName": "PSD"
+        },
+        "result": {
+          "attainedCII": "33.34",
+          "requiredCII": "6.98",
+          "reductionRate": "7%",
+          "ratio": "4.77",
+          "rating": "E",
+          "totalCO2": "311.4"
+        },
+        "timestamp": 1767200077849
+      },
+      {
+        "type": "CII",
+        "input": {
+          "dwt": 93414,
+          "distance": 1000,
+          "fuelList": [
+            {
+              "class": "Fossil",
+              "type": "ULSFO",
+              "amount": 100,
+              "scope": 1
+            }
+          ],
+          "shipType": "LNG carrier ( >= 100,000 DWT)",
+          "year": "2024",
+          "reductionRate": 7,
+          "imoNumber": "999999",
+          "vesselName": "PSD"
+        },
+        "result": {
+          "attainedCII": "3.33",
+          "requiredCII": "6.98",
+          "reductionRate": "7%",
+          "ratio": "0.48",
+          "rating": "A",
+          "totalCO2": "311.4"
+        },
+        "timestamp": 1767198617640
+      },
+      {
+        "type": "CII",
+        "input": {
+          "dwt": 93414,
           "distance": 50000,
           "fuelList": [
             {

@@ -169,3 +169,4 @@ class TradingService {
 }
 
 const tradingService = new TradingService();
+window.tradingService = tradingService;

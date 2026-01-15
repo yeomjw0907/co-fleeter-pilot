@@ -115,3 +115,4 @@ class LoadingManager {
 
 // Create global instance
 const loading = new LoadingManager();
+window.loading = loading;

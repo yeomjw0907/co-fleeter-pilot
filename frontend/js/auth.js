@@ -16,15 +16,6 @@ class AuthService {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
             });
-            
-            // Check if response is OK and content-type is JSON
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const text = await response.text();
-                console.error('Non-JSON response:', text.substring(0, 200));
-                return { success: false, message: 'Server error: Invalid response format' };
-            }
-            
             const data = await response.json();
 
             if (data.success) {
@@ -35,7 +26,7 @@ class AuthService {
             }
         } catch (error) {
             console.error('Login error:', error);
-            return { success: false, message: 'Network error: ' + error.message };
+            return { success: false, message: 'Network error' };
         }
     }
 

@@ -24,37 +24,16 @@ const poolingRoutes = require('./routes/poolingRoutes');
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// --- Production MongoDB Check ---
-if (process.env.NODE_ENV === 'production' && !process.env.MONGO_URI) {
-    console.error('❌ MONGO_URI environment variable is required for production deployment');
-    console.error('Please set it in Vercel Dashboard → Settings → Environment Variables');
-    process.exit(1);
-}
-
 // --- Middlewares ---
-const allowedOrigins = process.env.NODE_ENV === 'production'
-    ? [process.env.FRONTEND_URL || 'https://*.vercel.app']
-    : ['http://localhost:3000', 'http://localhost:8000'];
-
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (mobile apps, Postman, etc.)
+        // Allow requests with no origin (mobile apps, curl, etc)
         if (!origin) return callback(null, true);
-
-        if (process.env.NODE_ENV === 'production') {
-            // In production, allow any vercel.app domain and same origin requests
-            if (origin.includes('.vercel.app') || origin === process.env.FRONTEND_URL) {
-                return callback(null, true);
-            }
-            // Allow same origin (when frontend and backend are on same domain in Vercel)
+        // Allow localhost and Vercel domains
+        if (origin.includes('localhost') || origin.includes('vercel.app') || origin.includes('co-fleeter')) {
             return callback(null, true);
-        } else {
-            // In development, allow localhost
-            if (allowedOrigins.includes(origin)) {
-                return callback(null, true);
-            }
-            return callback(new Error('Not allowed by CORS'));
         }
+        callback(null, true); // Allow all for now
     },
     credentials: true
 }));
@@ -79,7 +58,6 @@ async function initialize() {
                 console.log('✅ Data loaded');
             } catch (loadError) {
                 console.error('⚠️ Data load error (continuing with defaults):', loadError.message);
-                // Continue with defaults - ensure admin user exists
                 _ensureAdminAndTraders();
             }
 
@@ -101,18 +79,14 @@ async function initialize() {
             return true;
         } catch (error) {
             console.error('❌ Initialization error:', error);
-            console.error('Error message:', error.message);
-            console.error('Error stack:', error.stack);
-            initPromise = null; // Reset on error
+            initPromise = null;
             isInitialized = false;
-            // Don't throw - allow server to continue with defaults
-            // Ensure admin user exists even if initialization failed
             try {
                 _ensureAdminAndTraders();
             } catch (e) {
                 console.error('Failed to ensure admin user:', e);
             }
-            return false; // Return false instead of throwing
+            return false;
         }
     })();
 
@@ -130,12 +104,10 @@ function _ensureAdminAndTraders() {
             return;
         }
 
-        // Ensure users array exists
         if (!db.users || !Array.isArray(db.users)) {
             db.users = [];
         }
 
-        // Ensure Admin
         let adminUser = db.users.find(u => u && u.email === 'cfadmin@cofleeter.com');
         if (!adminUser) {
             adminUser = {
@@ -152,49 +124,40 @@ function _ensureAdminAndTraders() {
         }
     } catch (error) {
         console.error('Error in _ensureAdminAndTraders:', error.message);
-        // Don't throw - this is a fallback function
     }
 }
 
 // --- Middleware to ensure initialization (BEFORE routes) ---
 app.use(async (req, res, next) => {
     try {
-        // Skip initialization check for static files
         if (req.path.startsWith('/js/') || req.path.startsWith('/css/') || req.path.endsWith('.html') || req.path.endsWith('.ico')) {
             return next();
         }
 
-        // Start initialization if not started (non-blocking)
         if (!isInitialized && !initPromise) {
             initPromise = initialize().catch(err => {
                 console.error('Initialization error (non-blocking):', err.message);
                 isInitialized = false;
                 initPromise = null;
-                // Ensure admin user exists even if initialization failed
                 _ensureAdminAndTraders();
                 return false;
             });
         }
 
-        // For API routes, wait briefly for initialization (max 3 seconds)
         if (req.path.startsWith('/api') && initPromise && !isInitialized) {
             try {
                 await Promise.race([
                     initPromise,
-                    new Promise((resolve) => setTimeout(() => resolve(false), 3000)) // 3초만 대기
+                    new Promise((resolve) => setTimeout(() => resolve(false), 3000))
                 ]);
             } catch (error) {
                 console.error('Initialization error in middleware:', error.message);
-                // Continue anyway
             }
         }
 
-        // Always allow requests to proceed
-        // Controllers will handle the case when db is not fully initialized
         next();
     } catch (error) {
         console.error('Middleware error:', error);
-        // Always return JSON for API routes
         if (req.path.startsWith('/api')) {
             return res.status(500).json({
                 success: false,
@@ -213,27 +176,23 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/pooling', poolingRoutes);
 app.use('/api', apiRoutes);
 
-// --- Error Handler Middleware ---
-app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    if (req.path.startsWith('/api')) {
-        // API routes should return JSON
-        res.status(err.status || 500).json({
-            success: false,
-            message: err.message || 'Internal server error',
-            error: process.env.NODE_ENV === 'development' ? err.stack : undefined
-        });
-    } else {
-        // Non-API routes can return HTML or redirect
-        res.status(err.status || 500).send(err.message || 'Internal server error');
+// --- SPA Fallback ---
+app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(__dirname, '../frontend/index.html'));
     }
 });
 
-// --- 404 Handler for API routes ---
-app.use('/api/*', (req, res) => {
-    res.status(404).json({
+// --- Global Error Handler ---
+app.use((err, req, res, next) => {
+    console.error('Global error handler:', err);
+    if (res.headersSent) {
+        return next(err);
+    }
+    res.status(500).json({
         success: false,
-        message: 'API endpoint not found'
+        message: 'A server error has occurred',
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
 });
 
@@ -247,10 +206,7 @@ if (process.env.NODE_ENV !== 'production') {
         });
     })();
 } else {
-    // In production, don't initialize on import
-    // Let it initialize on first request via middleware
     console.log('✅ Co-Fleeter Backend loaded for Vercel Serverless');
-    // Ensure admin user exists immediately (synchronous, safe)
     try {
         _ensureAdminAndTraders();
     } catch (e) {

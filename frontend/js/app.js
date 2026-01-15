@@ -121,6 +121,11 @@ document.addEventListener('DOMContentLoaded', () => {
             navigate(link.dataset.route);
         });
     });
+
+    // Initialize Default View
+    const activeLink = document.querySelector('.nav-link.active');
+    const initialRoute = activeLink ? activeLink.dataset.route : 'dashboard';
+    navigate(initialRoute);
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => {
@@ -276,31 +281,31 @@ async function renderDashboard() {
         
         <!-- Stats Cards -->
         <div class="grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <!-- Market Price Widget (Dynamic) -->
+            <div id="eua-widget" class="card">
+                <div class="font-bold text-lg mb-2">Market Price (EUA)</div>
+                <!-- Loading State placeholder matching simple style -->
+                <div class="animate-pulse h-8 w-16 bg-gray-700 rounded mt-2"></div>
+            </div>
+
             <div class="card">
-                <div class="text-muted text-sm">Managed Vessels</div>
+                <div class="font-bold text-lg mb-2">Managed Vessels</div>
                 <div class="text-2xl font-bold mt-2" style="font-size: 2rem;">${stats.totalShips}</div>
             </div>
             <div class="card">
-                <div class="text-muted text-sm">YTD CO2 Emissions (mT)</div>
+                <div class="font-bold text-lg mb-2">YTD CO2 Emissions (mT)</div>
                 <div class="text-2xl font-bold mt-2" style="font-size: 2rem;">${stats.totalCo2.toLocaleString()}</div>
             </div>
-            <div class="card">
-                <div class="text-muted text-sm">Fleet Average CII</div>
-                <div class="text-2xl font-bold mt-2" style="font-size: 2rem; color: var(--color-${stats.avgCii === 'A' || stats.avgCii === 'B' ? 'success' : 'accent'});">${stats.avgCii}</div>
-            </div>
-            <div class="card" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(15, 118, 110, 0.2)); border-color: var(--color-primary);">
-                <div class="text-muted text-sm">Market Status</div>
-                <div class="text-lg font-bold mt-2">Active Trading</div>
-                <button class="btn btn-primary btn-sm mt-3" onclick="navigate('trading-ets')">Go to Market</button>
-            </div>
+
+
         </div>
 
         <!-- Charts Section -->
         <div class="grid mt-4" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1rem;">
             <div class="card">
-                <h3 class="font-bold mb-4">CO2 Emissions Trend</h3>
+                <h3 class="font-bold mb-4">MARKET TENDENCY (EUA)</h3>
                 <div style="height: 250px; position: relative;">
-                    <canvas id="co2-trend-chart"></canvas>
+                    <canvas id="dashboard-eua-chart"></canvas>
                 </div>
             </div>
             <div class="card">
@@ -347,10 +352,72 @@ async function renderDashboard() {
     `;
 
     // Render charts after DOM is ready
-    setTimeout(() => {
-        // CO2 Trend Chart
-        const co2Data = charts.generateMockCO2Data();
-        charts.createCO2TrendChart('co2-trend-chart', co2Data);
+    setTimeout(async () => {
+        // --- EUA Widget Logic ---
+        const widget = document.getElementById('eua-widget');
+        if (widget) {
+            try {
+                const res = await fetch('/api/trading/history/eua');
+                const history = await res.json();
+
+                if (!history || history.length === 0) {
+                    widget.innerHTML = '<div class="text-muted">No Data</div>';
+                } else {
+                    const latest = history[0];
+                    const prev = history.length > 1 ? history[1] : null;
+
+                    const price = latest.price;
+                    const dateObj = new Date(latest.time);
+                    const dateStr = `(${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}/${dateObj.getFullYear()})`;
+
+                    let changeHtml = '';
+                    if (prev) {
+                        const diff = price - prev.price;
+                        const pct = ((diff / prev.price) * 100).toFixed(1);
+                        const sign = diff >= 0 ? '+' : '';
+                        const colorClass = diff >= 0 ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger';
+                        const icon = diff >= 0 ? '▲' : '▼';
+                        changeHtml = `<span class="badge ${colorClass} px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
+                        ${icon} ${sign}${pct}%
+                    </span>`;
+                    }
+
+                    widget.innerHTML = `
+                    <div class="font-bold text-lg mb-2">Market Price (EUA)</div>
+                    <div class="text-2xl font-bold mt-2 flex items-center gap-2" style="font-size: 2rem;">
+                        €${price.toFixed(2)}
+                        ${changeHtml}
+                    </div>
+                `;
+                }
+            } catch (e) {
+                console.error("EUA Widget Error", e);
+                widget.innerHTML = '<div class="text-xs text-danger">Failed to load price</div>';
+            }
+        }
+        // MARKET TENDENCY (EUA) Chart
+        let chartData = [];
+        try {
+            const res = await fetch('/api/trading/history/ets');
+            const history = await res.json();
+            if (Array.isArray(history) && history.length > 0) {
+                chartData = history;
+            }
+        } catch (e) {
+            console.error("Failed to load ETS history for dashboard", e);
+        }
+
+        // Fallback if empty
+        if (chartData.length === 0) {
+            chartData = [
+                { time: '09:00', price: 84 },
+                { time: '10:00', price: 84.5 },
+                { time: '11:00', price: 83.8 },
+                { time: '12:00', price: 85 },
+                { time: '13:00', price: 85.2 }
+            ];
+        }
+        charts.createAdvancedPriceChart('dashboard-eua-chart', chartData);
 
         // CII Distribution Chart
         const ciiDistribution = charts.calculateCIIDistribution(fleet);
@@ -732,8 +799,8 @@ async function renderTradingETS() {
         if (Array.isArray(history) && history.length > 0) {
             historyData = history; // Capture for chart
 
-            // "Bring the recent value" - Last item in sorted history is the latest valid price
-            const latest = history[history.length - 1];
+            // "Bring the recent value" - Backend returns DESC (Newest First)
+            const latest = history[0];
             currentPrice = latest.price;
 
             // "() contains the date of the EUA value" - DD/MM/YYYY
@@ -745,7 +812,7 @@ async function renderTradingETS() {
 
             // "+0.0% is the change vs previous day"
             if (history.length > 1) {
-                const prev = history[history.length - 2];
+                const prev = history[1];
                 if (prev.price) {
                     const diff = currentPrice - prev.price;
                     const pct = (diff / prev.price) * 100;
@@ -822,7 +889,7 @@ window.switchFuelEUTab = function (tab) {
         renderTradingView({
             title: 'FuelEU Maritime Marketplace',
             symbol: 'FEM',
-            price: 915.00,
+            price: 200.00,
             priceChange: '-0.2%',
             targetElement: container
         });
@@ -858,7 +925,7 @@ async function renderPoolingView(container) {
                         <thead class="text-muted text-xs border-b border-gray-700">
                              <tr>
                                 <th class="p-3">Pool/Vessel Name</th>
-                                <th class="p-3 text-right">Surplus (MJ)</th>
+                                <th class="p-3 text-right">Surplus (MT)</th>
                                 <th class="p-3 text-right">Price (€)</th>
                                 <th class="p-3 text-right">Type</th>
                                 <th class="p-3 text-center">Action</th>
@@ -930,7 +997,7 @@ async function renderPoolingView(container) {
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="input-label">Quantity (MJ)</label>
+                        <label class="block text-sm text-gray-400 mb-1">Quantity (MT)</label>
                         <input type="number" name="quantity" class="input-field" required placeholder="e.g. 5000000">
                     </div>
                     <div class="mb-3">
@@ -1028,20 +1095,146 @@ window.handleSimulatePool = function (poolId, poolName, price) {
 }
 
 // Generic Render Function
-// Generic Render Function
+// --- Global Trading Handlers ---
+
+// Request Transaction (FuelEU)
+window.handleRequestTransaction = async (id) => {
+    if (typeof loading !== 'undefined') loading.show("Requesting transaction...");
+    try {
+        const res = await window.tradingService.requestTransaction(id);
+        if (typeof loading !== 'undefined') loading.hide();
+        if (res.success) {
+            if (typeof toast !== 'undefined') toast.success(res.message);
+            // Refresh logic: re-render current view if possible
+            if (typeof renderTradingFuelEU === 'function') {
+                renderTradingFuelEU();
+            }
+        } else {
+            if (typeof toast !== 'undefined') toast.error(res.message);
+        }
+    } catch (e) {
+        if (typeof loading !== 'undefined') loading.hide();
+        console.error(e);
+        if (typeof toast !== 'undefined') toast.error("Error requesting transaction");
+    }
+};
+
+window.handleAgreeTransaction = async (id) => {
+    if (!confirm("Request this transaction? This will notify all parties.")) return;
+    if (typeof loading !== 'undefined') loading.show("Processing request...");
+    try {
+        const res = await window.tradingService.agreeTransaction(id);
+        if (typeof loading !== 'undefined') loading.hide();
+        if (res.success) {
+            if (typeof toast !== 'undefined') toast.success(res.message);
+            if (typeof renderTradingFuelEU === 'function') {
+                renderTradingFuelEU();
+            }
+        } else {
+            if (typeof toast !== 'undefined') toast.error(res.message);
+        }
+    } catch (e) {
+        if (typeof loading !== 'undefined') loading.hide();
+        console.error(e);
+        if (typeof toast !== 'undefined') toast.error("Error processing transaction");
+    }
+};
+
+window.handleAcceptQuoteWithEmail = async (orderId, traderEmail, price) => {
+    if (!confirm('Accept quote of €' + price + ' from this trader?')) return;
+
+    let phone = currentUser.phone;
+    if (!phone) {
+        phone = prompt("Please enter your contact phone number for the trader:");
+        if (!phone) {
+            window.toast.error("Phone number is required to proceed.");
+            return;
+        }
+    }
+
+    window.loading.show("Processing acceptance...");
+    try {
+        const res = await window.tradingService.acceptQuote(orderId, traderEmail, phone);
+        window.loading.hide();
+
+        if (res.success) {
+            window.toast.success("Quote accepted. Trader notified.");
+            if (!currentUser.phone) currentUser.phone = phone;
+
+            if (typeof renderTradingETS === 'function') {
+                renderTradingETS();
+            }
+        } else {
+            window.toast.error(res.message || "Failed to accept quote");
+        }
+    } catch (e) {
+        window.loading.hide();
+        console.error(e);
+        window.toast.error("Error accepting quote");
+    }
+};
+
+window.handleUpdateStatus = async (id, status) => {
+    try {
+        const res = await window.tradingService.updateStatus(id, status);
+        if (res) {
+            window.toast.success("Process status updated");
+        } else {
+            window.toast.error("Failed to update process status");
+        }
+    } catch (e) {
+        console.error(e);
+        window.toast.error("Error updating status");
+    }
+};
+
+window.handleCompleteOrder = async (id) => {
+    if (!confirm('Are you sure you want to complete this order?')) return;
+    window.loading.show("Completing order...");
+    try {
+        const res = await window.tradingService.updateStatus(id, 'FILLED');
+        window.loading.hide();
+        if (res) {
+            window.toast.success("Order completed successfully!");
+            if (typeof renderTradingETS === 'function') renderTradingETS();
+        } else {
+            window.toast.error("Failed to complete order");
+        }
+    } catch (e) {
+        window.loading.hide();
+        console.error(e);
+        window.toast.error("Error completing order");
+    }
+};
+
+// --- Generic Render Function ---
 async function renderTradingView(marketData) {
     const container = marketData.targetElement || contentArea;
-    container.innerHTML = '<div class="p-8 text-center"><div class="spinner"></div><p>Loading market data...</p></div>';
+    try {
+        container.innerHTML = '<div class="p-8 text-center"><div class="spinner"></div><p>Loading market data...</p></div>';
 
-    // Pass User Context for Privacy Filtering
-    const orders = await tradingService.getOrders(marketData.symbol, currentUser.email);
-    const executedVolumes = await tradingService.getExecutedVolumes(marketData.symbol);
+        // Pass User Context for Privacy Filtering
+        let orders = [];
+        let executedVolumes = {};
 
-    const activeFilter = window.currentOrderBookFilter || 'ALL';
-    const isRFQ = marketData.useQuoteSystem === true;
-    const isTrader = currentUser.role === 'TRADER';
+        try {
+            if (currentUser && currentUser.email) {
+                orders = await tradingService.getOrders(marketData.symbol, currentUser.email);
+            } else {
+                orders = await tradingService.getOrders(marketData.symbol, null);
+            }
+            executedVolumes = await tradingService.getExecutedVolumes(marketData.symbol);
+        } catch (e) {
+            console.error("Error loading market data:", e);
+            // Fallback to empty to ensure render proceeds
+            toast.error("Partial failure loading market data");
+        }
 
-    let html = `
+        const activeFilter = window.currentOrderBookFilter || 'ALL';
+        const isRFQ = marketData.useQuoteSystem === true;
+        const isTrader = currentUser.role === 'TRADER';
+
+        let html = `
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-bold">${marketData.title}</h2>
         </div>
@@ -1062,9 +1255,9 @@ async function renderTradingView(marketData) {
                         📅 ${marketData.dateString || '--'}
                     </span>
                     ${(marketData.priceChange || '').includes('-')
-                ? `<span style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; padding: 4px 12px; border-radius: 99px; font-weight: bold; font-size: 0.9rem;">📉 ${marketData.priceChange}</span>`
-                : `<span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; padding: 4px 12px; border-radius: 99px; font-weight: bold; font-size: 0.9rem;">📈 ${marketData.priceChange}</span>`
-            }
+                    ? `<span style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; padding: 4px 12px; border-radius: 99px; font-weight: bold; font-size: 0.9rem;">📉 ${marketData.priceChange}</span>`
+                    : `<span style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; padding: 4px 12px; border-radius: 99px; font-weight: bold; font-size: 0.9rem;">📈 ${marketData.priceChange}</span>`
+                }
                 </div>
             </div>
         </div>
@@ -1072,25 +1265,33 @@ async function renderTradingView(marketData) {
         
         <!-- Order Entry (Hidden for Traders in RFQ) -->
         ${!isTrader || !isRFQ ? `
-        <div class="grid grid-cols-2 gap-6 mb-8">
+        <div class="${isRFQ ? 'grid' : 'grid grid-cols-2 gap-6'}" style="${isRFQ ? 'display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;' : ''} margin-bottom: 1rem;">
             ${isRFQ ? `
                  <!-- RFQ Request Only -->
-                 <div class="card p-6 col-span-2" style="background: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.9)); border: 1px solid var(--color-primary);">
-                    <form onsubmit="handlePlaceOrderInline(event)" class="flex gap-4 items-end">
+                 <div class="card p-6" style="background: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.9)); border: 1px solid var(--color-primary);">
+                    <form id="rfq-form" class="flex gap-4 items-end">
                         <input type="hidden" id="order-symbol" value="${marketData.symbol}">
                         <input type="hidden" name="orderType" value="RFQ">
                          <div class="flex-1">
                             <label class="input-label text-lg mb-2">${marketData.quantityLabel || 'Quantity'}</label>
                             <input type="number" id="order-qty" class="input-field text-xl py-3 px-4" required placeholder="1000">
                         </div>
-                        <button type="submit" class="btn btn-primary text-xl py-3 px-8">Request Quote</button>
+                        <button type="button" onclick="submitOrderSafe(event)" class="btn btn-primary text-xl py-3 px-8">Request Quote</button>
                     </form>
                  </div>
+                 
+                 <!-- Instructions (RFQ Position) -->
+                <div class="card bg-gradient h-full flex flex-col justify-center">
+                     <h3 class="font-bold mb-2">Instructions</h3>
+                     <p class="text-sm text-muted mb-0">
+                        Request a quote for your required quantity. Traders will respond with their best offers. Accept a quote to finalize the trade.
+                     </p>
+                </div>
             ` : `
                 <!-- BUY SECTION -->
                 <div class="card p-6 border-l-8 border-success bg-gradient-to-r from-green-900/20 to-transparent">
                     <h3 class="text-2xl font-bold text-success mb-4">BUY ${marketData.symbol}</h3>
-                    <form onsubmit="handlePlaceOrderInline(event)">
+                    <form id="buy-form">
                         <input type="hidden" id="order-symbol-buy" value="${marketData.symbol}">
                         <input type="hidden" name="orderType" value="BUY">
                         <div class="grid gap-4 mb-4">
@@ -1099,18 +1300,18 @@ async function renderTradingView(marketData) {
                                 <input type="number" id="order-qty-buy" class="input-field text-xl p-3 h-14" required placeholder="Amount" style="font-size: 1.25rem;">
                             </div>
                             <div>
-                                <label class="input-label text-lg">Price (€)</label>
+                                <label class="input-label text-lg">Unit Price (€/MT)</label>
                                 <input type="number" id="order-price-buy" class="input-field text-xl p-3 h-14" required placeholder="Price" step="0.01" value="${marketData.price}" style="font-size: 1.25rem;">
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-success w-full text-xl py-4 font-extrabold shadow-lg shadow-green-900/20 h-16">PLACE BUY ORDER</button>
+                        <button type="button" onclick="submitOrderSafe(event)" class="btn btn-success w-full text-xl py-4 font-extrabold shadow-lg shadow-green-900/20 h-16">PLACE BUY ORDER</button>
                     </form>
                 </div>
 
                 <!-- SELL SECTION -->
                 <div class="card p-6 border-l-8 border-danger bg-gradient-to-r from-red-900/20 to-transparent">
                     <h3 class="text-2xl font-bold text-danger mb-4">SELL ${marketData.symbol}</h3>
-                    <form onsubmit="handlePlaceOrderInline(event)">
+                    <form id="sell-form">
                         <input type="hidden" id="order-symbol-sell" value="${marketData.symbol}">
                         <input type="hidden" name="orderType" value="SELL">
                          <div class="grid gap-4 mb-4">
@@ -1119,11 +1320,11 @@ async function renderTradingView(marketData) {
                                 <input type="number" id="order-qty-sell" class="input-field text-xl p-3 h-14" required placeholder="Amount" style="font-size: 1.25rem;">
                             </div>
                             <div>
-                                <label class="input-label text-lg">Price (€)</label>
+                                <label class="input-label text-lg">Unit Price (€/MT)</label>
                                 <input type="number" id="order-price-sell" class="input-field text-xl p-3 h-14" required placeholder="Price" step="0.01" value="${marketData.price}" style="font-size: 1.25rem;">
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-danger w-full text-xl py-4 font-extrabold shadow-lg shadow-red-900/20 h-16">PLACE SELL ORDER</button>
+                        <button type="button" onclick="submitOrderSafe(event)" class="btn btn-danger w-full text-xl py-4 font-extrabold shadow-lg shadow-red-900/20 h-16">PLACE SELL ORDER</button>
                     </form>
                 </div>
             `}
@@ -1140,7 +1341,15 @@ async function renderTradingView(marketData) {
                             <button onclick="setOrderBookFilter('ALL')" class="btn btn-sm ${activeFilter === 'ALL' ? 'btn-primary' : 'btn-outline'}">All</button>
                             <button onclick="setOrderBookFilter('BUY')" class="btn btn-sm ${activeFilter === 'BUY' ? 'btn-primary' : 'btn-outline'}">Buys</button>
                             <button onclick="setOrderBookFilter('SELL')" class="btn btn-sm ${activeFilter === 'SELL' ? 'btn-primary' : 'btn-outline'}">Sells</button>
-                        </div>` : ''}
+                        </div>` : `
+                        <div class="flex justify-end gap-2">
+                             <span class="text-xs text-muted self-center">Sort Traders by:</span>
+                             <select onchange="window.setQuoteSort(this.value)" class="bg-gray-800 text-white text-xs border border-gray-600 rounded px-2 py-1">
+                                 <option value="PRICE" ${window.currentQuoteSort === 'PRICE' ? 'selected' : ''}>Best Price</option>
+                                 <option value="TIME" ${window.currentQuoteSort === 'TIME' ? 'selected' : ''}>Bid Time</option>
+                                 <option value="VOLUME" ${window.currentQuoteSort === 'VOLUME' ? 'selected' : ''}>Trader Volume</option>
+                             </select>
+                        </div>`}
                     </div>
 
                     <div style="max-height: 400px; overflow-y: auto;">
@@ -1155,90 +1364,123 @@ async function renderTradingView(marketData) {
                                         <th class="p-2 text-center">My Quote</th>
                                         <th class="p-2 text-center">Action</th>
                                     ` : `
-                                        <th class="p-2 text-center">Trader A</th>
-                                        <th class="p-2 text-center">Trader B</th>
-                                        <th class="p-2 text-center">Trader C</th>
+                                        <th class="p-2 text-center">Best Offer</th>
+                                        <th class="p-2 text-center">2nd</th>
+                                        <th class="p-2 text-center">3rd</th>
+                                        <th class="p-2 text-center">4th</th>
+                                        <th class="p-2 text-center">5th</th>
                                     `}
                                 </tr>
                             </thead>
                             <tbody>
                             ${orders.filter(o => o.status === 'OPEN').map(order => {
-                // TRADER VIEW
-                if (isTrader) {
-                    // Check if I already quoted
-                    const myQuote = order.quotes ? order.quotes[currentUser.email] : null;
-                    return `
+                    // TRADER VIEW
+                    if (isTrader) {
+                        // Check if I already quoted
+                        const myQuote = order.quotes ? order.quotes[currentUser.email] : null;
+                        return `
                                     <tr class="border-b border-white/5 hover:bg-white/5">
                                         <td class="p-2">
-                                            <span class="badge text-primary text-xs">RFQ</span> <span class="text-xs text-muted">${new Date(order.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true })}</span>
+                                            <span class="badge text-primary text-xs">RFQ</span> <span class="text-xs text-muted">${(() => { const d = new Date(order.timestamp); return `${d.getFullYear()} ${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}, ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`; })()}</span>
                                             <div class="text-xs">${order.owner}</div>
                                         </td>
                                         <td class="p-2 text-center font-bold">${order.quantity.toLocaleString()}</td>
                                         <td class="p-2 text-center">
                                             ${myQuote ?
-                            `<span class="text-success font-bold">€${myQuote.price}</span>` :
-                            `<input type="number" id="quote-in-${order.id}" class="input-field py-1 text-center h-8" placeholder="Price">`
-                        }
+                                `<span class="text-success font-bold">€${myQuote.price}</span>` :
+                                `<input type="number" id="quote-in-${order.id}" class="input-field py-1 text-center h-8" placeholder="Price">`
+                            }
                                         </td>
                                         <td class="p-2 text-center">
                                             ${myQuote ?
-                            `<span class="text-xs text-muted">Submitted</span>` :
-                            `<button onclick="handleSubmitQuote('${order.id}', document.getElementById('quote-in-${order.id}').value)" class="btn btn-sm btn-primary">Submit</button>`
-                        }
+                                `<span class="text-xs text-muted">Submitted</span>` :
+                                `<button onclick="handleSubmitQuote('${order.id}', document.getElementById('quote-in-${order.id}').value)" class="btn btn-sm btn-primary">Submit</button>`
+                            }
                                         </td>
                                     </tr>`;
-                }
-                // USER/ADMIN VIEW
-                else {
-                    // Helper to render cell for a trader
-                    const renderTraderCell = (email) => {
-                        const q = order.quotes ? order.quotes[email] : null;
-                        if (!q) return `<span class="text-muted text-xs">-</span>`;
+                    }
+                    // USER/ADMIN VIEW
+                    else {
+                        // USER/ADMIN VIEW - DYNAMIC TOP 5 & SORTING
 
-                        // If order is already processed/filled, show result
-                        if (order.status !== 'OPEN') {
-                            // Check if this specific quote was the winner
-                            // Note: filledBy stores the Name. q.traderName also Name.
-                            // We should compare reliable identifiers. 
-                            // Logic: If order.filledBy matches this trader's name.
-                            if (order.filledBy === q.traderName) {
-                                return `
-                                    <div class="flex flex-col items-center gap-1">
-                                        <span class="font-bold text-success">€${q.price}</span>
-                                        <span class="badge bg-success/20 text-success text-xs">Selected</span>
-                                    </div>`;
-                            } else {
-                                // This quote was not selected
-                                return `
-                                    <div class="flex flex-col items-center gap-1 opacity-50">
-                                        <span class="font-bold text-muted">€${q.price}</span>
-                                        <span class="text-xs text-muted">Closed</span>
-                                    </div>`;
+                        // 1. Calculate Trader Volumes (On the fly)
+                        const traderVolumes = {};
+                        orders.forEach(o => {
+                            if (o.status === 'FILLED' && o.filledBy) {
+                                traderVolumes[o.filledBy] = (traderVolumes[o.filledBy] || 0) + o.quantity;
                             }
+                        });
+
+                        // 2. Gather Quotes
+                        let quoteList = [];
+                        if (order.quotes) {
+                            Object.keys(order.quotes).forEach(email => {
+                                quoteList.push({
+                                    email: email,
+                                    ...order.quotes[email]
+                                });
+                            });
                         }
 
-                        // Order is OPEN -> Show Accept Button
-                        return `
-                                            <div class="flex flex-col items-center gap-1">
-                                                <span class="font-bold text-success">€${q.price}</span>
-                                                <button onclick="handleAcceptQuoteWithEmail('${order.id}', '${email}', ${q.price})" class="btn btn-xs btn-outline border-success text-success py-0 px-2 mt-1">Accept</button>
-                                            </div>
-                                        `;
-                    };
+                        // 3. Sort
+                        quoteList.sort((a, b) => {
+                            const sortMode = window.currentQuoteSort || 'PRICE';
+                            if (sortMode === 'PRICE') return a.price - b.price;
+                            if (sortMode === 'TIME') return (a.timestamp || 0) - (b.timestamp || 0);
+                            if (sortMode === 'VOLUME') {
+                                const volA = traderVolumes[a.traderName] || 0;
+                                const volB = traderVolumes[b.traderName] || 0;
+                                return volB - volA;
+                            }
+                            return a.price - b.price;
+                        });
 
-                    return `
+                        // 4. Top 5
+                        const topQuotes = quoteList.slice(0, 5);
+                        const cells = [];
+
+                        const renderCell = (q) => {
+                            if (!q) return `<td class="p-2 text-center text-muted text-xs bg-white/5 opacity-50">-</td>`;
+
+                            if (order.status !== 'OPEN' && order.filledBy === q.traderName) {
+                                return `<td class="p-2 text-center">
+                                <div class="flex flex-col items-center gap-1">
+                                    <span class="font-bold text-success">€${q.price}</span>
+                                    <span class="badge bg-success/20 text-success text-xs">Selected</span>
+                                    <div class="text-[10px] text-muted">${q.traderName || 'Unknown'}</div>
+                                </div>
+                            </td>`;
+                            } else if (order.status !== 'OPEN') {
+                                return `<td class="p-2 text-center opacity-50">
+                                <div class="flex flex-col items-center gap-1">
+                                    <span class="font-bold text-muted">€${q.price}</span>
+                                    <span class="text-xs text-muted">Closed</span>
+                                </div>
+                            </td>`;
+                            }
+
+                            return `<td class="p-2 text-center">
+                            <div class="flex flex-col items-center gap-1">
+                                <span class="font-bold text-white">€${q.price}</span>
+                                <div class="text-[10px] text-muted">${q.traderName || 'Unknown'}</div>
+                                <button onclick="handleAcceptQuoteWithEmail('${order.id}', '${q.email}', ${q.price})" class="btn btn-xs btn-outline border-success text-success py-0 px-2 mt-1">Accept</button>
+                            </div>
+                        </td>`;
+                        };
+
+                        for (let i = 0; i < 5; i++) cells.push(renderCell(topQuotes[i]));
+
+                        return `
                                     <tr class="border-b border-white/5 hover:bg-white/5">
                                         <td class="p-2">
-                                            <span class="text-xs text-muted">${new Date(order.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true })}</span>
+                                            <span class="text-xs text-muted">${(() => { const d = new Date(order.timestamp); return `${d.getFullYear()} ${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}, ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`; })()}</span>
                                             ${currentUser.role === 'ADMIN' ? `<div class="text-xs text-white">${order.owner}</div>` : ''}
                                         </td>
                                         <td class="p-2 text-center font-bold">${order.quantity.toLocaleString()}</td>
-                                        <td class="p-2 text-center">${renderTraderCell('atrader@cofleeter.com')}</td>
-                                        <td class="p-2 text-center">${renderTraderCell('btrader@cofleeter.com')}</td>
-                                        <td class="p-2 text-center">${renderTraderCell('ctrader@cofleeter.com')}</td>
+                                        ${cells.join('')}
                                     </tr>`;
-                }
-            }).join('')}
+                    }
+                }).join('')}
                             ${orders.filter(o => o.status === 'OPEN').length === 0 ? '<tr><td colspan="5" class="p-4 text-center text-muted">No open RFQs</td></tr>' : ''}
                             </tbody>
                         </table>
@@ -1254,36 +1496,36 @@ async function renderTradingView(marketData) {
                             </thead>
                             <tbody>
                             ${(() => {
-            const priceMap = {};
-            orders.forEach(o => {
-                if (activeFilter !== 'ALL' && o.type !== activeFilter) return;
-                if (!priceMap[o.price]) priceMap[o.price] = { buyVol: 0, sellVol: 0, myBuyVol: 0, mySellVol: 0 };
+                const priceMap = {};
+                orders.forEach(o => {
+                    if (activeFilter !== 'ALL' && o.type !== activeFilter) return;
+                    if (!priceMap[o.price]) priceMap[o.price] = { buyVol: 0, sellVol: 0, myBuyVol: 0, mySellVol: 0 };
 
-                if (o.type === 'BUY') {
-                    priceMap[o.price].buyVol += o.quantity;
-                    if (auth.currentUser && o.owner === auth.currentUser.name) {
-                        priceMap[o.price].myBuyVol += o.quantity;
+                    if (o.type === 'BUY') {
+                        priceMap[o.price].buyVol += o.quantity;
+                        if (auth.currentUser && o.owner === auth.currentUser.name) {
+                            priceMap[o.price].myBuyVol += o.quantity;
+                        }
                     }
-                }
-                if (o.type === 'SELL') {
-                    priceMap[o.price].sellVol += o.quantity;
-                    if (auth.currentUser && o.owner === auth.currentUser.name) {
-                        priceMap[o.price].mySellVol += o.quantity;
+                    if (o.type === 'SELL') {
+                        priceMap[o.price].sellVol += o.quantity;
+                        if (auth.currentUser && o.owner === auth.currentUser.name) {
+                            priceMap[o.price].mySellVol += o.quantity;
+                        }
                     }
-                }
-            });
-            const sortedPrices = Object.keys(priceMap).map(Number).sort((a, b) => b - a);
+                });
+                const sortedPrices = Object.keys(priceMap).map(Number).sort((a, b) => b - a);
 
-            if (sortedPrices.length === 0) return '<tr><td colspan="3" class="p-4 text-center text-muted">No active orders</td></tr>';
+                if (sortedPrices.length === 0) return '<tr><td colspan="3" class="p-4 text-center text-muted">No active orders</td></tr>';
 
-            return sortedPrices.map((price) => {
-                const data = priceMap[price];
-                const execVol = executedVolumes[price.toFixed(2)];
-                return `
+                return sortedPrices.map((price) => {
+                    const data = priceMap[price];
+                    const execVol = executedVolumes[price.toFixed(2)];
+                    return `
                                         <tr class="border-b border-white/5 hover:bg-white/5 cursor-pointer">
                                             <td class="p-3 text-right font-bold text-success text-3xl" onclick="fillOrderForm('SELL', ${price}, ${data.buyVol})">
                                                 ${data.buyVol > 0 ? data.buyVol.toLocaleString() : '-'}
-                                                ${data.myBuyVol > 0 ? `<div class="text-lg text-yellow-400 font-normal">(내 청규량: ${data.myBuyVol.toLocaleString()})</div>` : ''}
+                                                ${data.myBuyVol > 0 ? `<div class="text-xs text-yellow-400 font-normal">(My Q' ${data.myBuyVol.toLocaleString()})</div>` : ''}
                                             </td>
                                             <td class="p-3 text-center" onclick="fillOrderForm(null, ${price}, null)">
                                                 <div class="font-bold text-3xl">${price.toFixed(2)}</div>
@@ -1291,11 +1533,11 @@ async function renderTradingView(marketData) {
                                             </td>
                                             <td class="p-3 text-left font-bold text-danger text-3xl" onclick="fillOrderForm('BUY', ${price}, ${data.sellVol})">
                                                 ${data.sellVol > 0 ? data.sellVol.toLocaleString() : '-'}
-                                                ${data.mySellVol > 0 ? `<div class="text-lg text-yellow-400 font-normal">(내 청규량: ${data.mySellVol.toLocaleString()})</div>` : ''}
+                                                ${data.mySellVol > 0 ? `<div class="text-xs text-yellow-400 font-normal">(My Q' ${data.mySellVol.toLocaleString()})</div>` : ''}
                                             </td>
                                         </tr>`;
-            }).join('');
-        })()}
+                }).join('');
+            })()}
                             </tbody>
                         </table>
                     `}
@@ -1309,10 +1551,10 @@ async function renderTradingView(marketData) {
                         <table class="w-full text-lg text-left">
                             <thead class="text-sm text-muted font-bold border-b border-white/10">
                                 <tr>
-                                    <th class="p-2">Type</th>
+                                    <th class="p-2">Info</th>
                                     <th class="p-2 text-center">Qty</th>
-                                    <th class="p-2 text-center">Price</th>
                                     <th class="p-2 text-center">Unit Price (€/MT)</th>
+                                    <th class="p-2 text-center">Total Price (€)</th>
                                     ${marketData.symbol === 'FEM' ? '<th class="p-2 text-center">Counterparty</th>' : ''}
                                     <th class="p-2 text-center">Action</th>
                                     <th class="p-2 text-center">Process</th>
@@ -1320,250 +1562,153 @@ async function renderTradingView(marketData) {
                             </thead>
                             <tbody>
                             ${(() => {
-            const myOrders = currentUser.role === 'ADMIN' ? orders : orders.filter(o => o.owner === currentUser.name || (o.quotes && o.quotes[currentUser.email]));
+                const myOrders = currentUser.role === 'ADMIN' ? orders : orders.filter(o => o.owner === currentUser.name || (o.quotes && o.quotes[currentUser.email]));
 
-            return myOrders.map(order => {
-                const isAdmin = currentUser.role === 'ADMIN';
-                const isTrader = currentUser.role === 'TRADER';
-                const isBuyer = order.owner === currentUser.name;
-                const isMyWin = order.filledBy === currentUser.name;
-                const isFilledStart = order.status === 'FILLED';
-                const isProcessing = order.status === 'PROCESSING';
+                return myOrders.map(order => {
+                    const isAdmin = currentUser.role === 'ADMIN';
+                    const isTrader = currentUser.role === 'TRADER';
+                    const isBuyer = order.owner === currentUser.name;
+                    const isMyWin = order.filledBy === currentUser.name;
+                    const isFilledStart = order.status === 'FILLED';
+                    const isProcessing = order.status === 'PROCESSING';
 
-                // Determine Action Column Content
-                let actionHtml = '-';
-                if (isAdmin) {
-                    actionHtml = `<span class="text-xs text-info">${order.filledBy || '-'}</span>`;
-                } else if (isBuyer) {
-                    if (isProcessing) actionHtml = `<button onclick="handleCompleteOrder('${order.id}')" class="btn btn-xs btn-primary">Complete</button>`;
-                    else if (isFilledStart) actionHtml = `<span class="text-xs text-info">${order.filledBy || '-'}</span>`;
-                } else if (isTrader) {
-                    if (isMyWin) {
-                        actionHtml = `<span class="white font-bold">${order.ownerCompany || order.owner || 'Buyer'}</span>`;
-                    } else {
-                        actionHtml = `<span class="text-xs text-muted">${new Date(order.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true })}</span>`;
+                    // Determine Action Column Content
+                    let actionHtml = '-';
+                    if (isAdmin) {
+                        actionHtml = `<span class="text-xs text-info">${order.filledBy || '-'}</span>`;
+                    } else if (isBuyer) {
+                        if (isProcessing) actionHtml = `<button onclick="handleCompleteOrder('${order.id}')" class="btn btn-xs btn-primary">Complete</button>`;
+                        else if (isFilledStart) actionHtml = `<span class="text-xs text-info">${order.filledBy || '-'}</span>`;
+                    } else if (isTrader) {
+                        if (isMyWin) {
+                            actionHtml = `<span class="white font-bold">${order.ownerCompany || order.owner || 'Buyer'}</span>`;
+                        } else {
+                            actionHtml = `<span class="text-xs text-muted">${(() => { const d = new Date(order.timestamp); return `${d.getFullYear()} ${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}, ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`; })()}</span>`;
+                        }
                     }
-                }
 
-                // Process (Status) Column - Editable Dropdown
-                let statusHtml = '';
-                const statusOptions = ['OPEN', 'REQUESTING', 'REQUESTED', 'AGREED', 'PROCESSING', 'DOCUMENTING', 'FILLED', 'CANCELLED'];
+                    // Process (Status) Column - Editable Dropdown
+                    let statusHtml = '';
+                    const statusOptions = ['OPEN', 'REQUESTING', 'REQUESTED', 'AGREED', 'PROCESSING', 'DOCUMENTING', 'FILLED', 'CANCELLED'];
 
-                // If user has rights to change status (Buyer, Admin, or Involved Trader) - For simplicity, let involved parties edit process
-                const canEdit = isAdmin || isBuyer || (isTrader && isMyWin) || (isTrader && order.status === 'REQUESTED');
+                    // If user has rights to change status (Buyer, Admin, or Involved Trader) - For simplicity, let involved parties edit process
+                    const canEdit = isAdmin || isBuyer || (isTrader && isMyWin) || (isTrader && order.status === 'REQUESTED');
 
-                if (canEdit && marketData.symbol === 'FEM') {
-                    statusHtml = `
+                    if (canEdit && marketData.symbol === 'FEM') {
+                        statusHtml = `
                        <select onchange="handleUpdateStatus('${order.id}', this.value)" class="bg-transparent border border-gray-700 rounded text-xs p-1">
                            ${statusOptions.map(opt => `<option value="${opt}" ${order.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
                        </select>
                    `;
-                } else {
-                    statusHtml = `<span class="text-sm ${order.status === 'FILLED' ? 'text-success' : 'text-muted'}">${order.status}</span>`;
-                }
-
-                // Open / RFQ logic
-                const isRFQ = !order.price;
-                const priceDisplay = isRFQ ? 'RFQ' : '€' + order.price;
-                let unitPriceDisplay = '-';
-                const isDeleted = order.deleted === true;
-                const rowStyle = isDeleted ? 'text-decoration: line-through; opacity: 0.6; color: var(--color-danger);' : '';
-                const rowClass = isDeleted ? 'bg-danger/10 border-danger/30' : 'border-white/5';
-
-                if (!isRFQ) {
-                    const p = parseFloat(order.price);
-                    if (p > 0) unitPriceDisplay = '€' + (p / order.quantity).toFixed(2);
-                }
-
-                // Action Button Logic
-                let actionBtn = '-';
-                if (order.status === 'OPEN') {
-                    if (order.owner === currentUser.name) {
-                        actionBtn = `<button onclick="handleCancelOrder('${order.id}')" class="text-danger hover:underline text-xs">Cancel</button>`;
-                    } else if (isAdmin) {
-                        actionBtn = `<button onclick="handleCancelOrder('${order.id}')" class="text-danger hover:underline text-xs">Delete</button>`;
+                    } else {
+                        let displayStatus = order.status;
+                        if (order.status === 'CONTRACT') displayStatus = 'CONTRACT (Processing)';
+                        statusHtml = `<span class="text-sm ${order.status === 'FILLED' ? 'text-success' : (order.status === 'CONTRACT' ? 'text-info' : 'text-muted')}">${displayStatus}</span>`;
                     }
-                }
 
-                // FuelEU Action Logic (Two-Step)
-                if (order.status === 'OPEN' && order.owner === currentUser.name && marketData.symbol === 'FEM') {
-                    const opponentType = order.type === 'BUY' ? 'SELL' : 'BUY';
-                    const hasMatch = orders.some(o => o.symbol === order.symbol && o.type === opponentType && (order.type === 'BUY' ? o.price <= order.price : o.price >= order.price) && o.status === 'OPEN');
-                    if (hasMatch) {
-                        actionBtn = `<div class="flex flex-col gap-1 items-center">
-                                         <button onclick="handleRequestTransaction('${order.id}')" class="btn btn-xs btn-primary">Request</button>
+                    // Open / RFQ logic
+                    const isRFQ = !order.price;
+                    let priceDisplay = isRFQ ? 'RFQ' : '€' + order.price;
+                    let unitPriceDisplay = '-';
+                    const isDeleted = order.deleted === true;
+                    const rowStyle = isDeleted ? 'text-decoration: line-through; opacity: 0.6; color: var(--color-danger);' : '';
+                    const rowClass = isDeleted ? 'bg-danger/10 border-danger/30' : 'border-white/5';
+
+                    if (!isRFQ) {
+                        const p = parseFloat(order.price);
+                        if (p > 0) {
+                            unitPriceDisplay = '€' + p.toFixed(2);
+                            priceDisplay = '€' + (p * order.quantity).toLocaleString();
+                        }
+                    }
+
+                    // Action Button Logic
+                    let actionBtn = '-';
+                    if (order.status === 'OPEN') {
+                        if (order.owner === currentUser.name) {
+                            actionBtn = `<button onclick="handleCancelOrder('${order.id}')" class="text-danger hover:underline text-xs">Cancel</button>`;
+                        } else if (isAdmin) {
+                            actionBtn = `<button onclick="handleCancelOrder('${order.id}')" class="text-danger hover:underline text-xs">Delete</button>`;
+                        }
+                    }
+
+                    // FuelEU Action Logic (Two-Step)
+                    if (order.status === 'OPEN' && order.owner === currentUser.name && marketData.symbol === 'FEM') {
+                        const opponentType = order.type === 'BUY' ? 'SELL' : 'BUY';
+                        // Matches if Opponent Price is favorable AND My Sell >= Opponent Buy (or Opponent Sell >= My Buy check done in backend, here just visibility)
+                        // Actually, backend now enforces Sell >= Buy.
+                        // For front-end button, we just check general match possibility.
+                        const hasMatch = orders.some(o => o.symbol === order.symbol && o.type === opponentType && (order.type === 'BUY' ? o.price <= order.price : o.price >= order.price) && o.status === 'OPEN');
+                        if (hasMatch) {
+                            actionBtn = `<div class="flex flex-col gap-1 items-center">
+                                         <button onclick="handleRequestTransaction('${order.id}')" class="btn btn-xs btn-primary">Request (Match)</button>
                                          <button onclick="handleCancelOrder('${order.id}')" class="text-danger hover:underline text-xs">Cancel</button>
                                      </div>`;
+                        }
                     }
-                }
-                if (order.status === 'REQUESTED') {
-                    actionBtn = `<button onclick="handleAgreeTransaction('${order.id}')" class="btn btn-xs btn-primary">Request</button>`;
-                }
-                if (order.status === 'REQUESTING') {
-                    actionBtn = `<span class="text-xs text-warning">Waiting...</span>`;
-                }
-                if (order.status === 'PROCESSING') {
-                    actionBtn = `<span class="text-xs text-info">Processing...</span>`;
-                }
+                    if (order.status === 'REQUESTED') {
+                        actionBtn = `<button onclick="handleAgreeTransaction('${order.id}')" class="btn btn-xs btn-success">Processing</button>`;
+                    }
+                    if (order.status === 'REQUESTING') {
+                        actionBtn = `<span class="text-xs text-warning">Waiting for Agree...</span>`;
+                    }
+                    if (order.status === 'CONTRACT') {
+                        if (isAdmin || (isTrader && marketData.symbol === 'FEM')) {
+                            actionBtn = `<button onclick="handleCompleteOrder('${order.id}')" class="btn btn-xs btn-primary">Complete</button>`;
+                        } else {
+                            actionBtn = `<span class="text-xs text-info font-bold">Under Contract</span>`;
+                        }
+                    }
 
 
-                return `
+                    return `
                     <tr class="border-b ${rowClass}" style="${rowStyle}">
-                        <td class="p-2">${order.type}</td>
+                        <td class="p-2"><span class="text-xs text-muted">${(() => { const d = new Date(order.timestamp); return `${d.getFullYear()} ${d.toLocaleString('en-US', { month: 'short' })} ${d.getDate()}, ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`; })()}</span></td>
                         <td class="p-2 text-center font-bold text-xl">${order.quantity.toLocaleString()}</td>
-                        <td class="p-2 text-center text-xl">${priceDisplay}</td>
-                        <td class="p-2 text-center text-muted text-lg">${unitPriceDisplay}</td>
+                        <td class="p-2 text-center text-xl">${unitPriceDisplay}</td>
+                        <td class="p-2 text-center text-muted text-lg">${priceDisplay}</td>
                         ${marketData.symbol === 'FEM' ? `<td class="p-2 text-center text-info font-bold">FuelEU Trader</td>` : ''}
                         <td class="p-2 text-center text-sm">${actionBtn}</td>
                         <td class="p-2 text-center text-sm">${statusHtml}</td>
                     </tr>
                 `;
-            }).join('') || `<tr><td colspan="7" class="p-4 text-center text-muted">No history</td></tr>`;
-        })()}
+                }).join('') || `<tr><td colspan="7" class="p-4 text-center text-muted">No history</td></tr>`;
+            })()}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column -->
+        <!-- Right Column -->
             <div>
-                 ${marketData.symbol !== 'FEM' ? `
-                <div class="card mb-4">
-                    <h3 class="font-bold mb-2 text-sm text-muted">MARKET PRICE</h3>
-                    <div class="text-3xl font-bold text-success">€ ${marketData.price.toFixed(2)}</div>
-                    <div class="text-sm text-muted">${marketData.priceChange}</div>
-                </div>` : ''}
-
+                ${!isRFQ ? `
                 <div class="card bg-gradient">
                      <h3 class="font-bold mb-2">Instructions</h3>
                      <p class="text-sm text-muted mb-2">
-                        ${isRFQ ?
-            "Request a quote for your required quantity. Traders will respond with their best offers. Accept a quote to finalize the trade." :
-            "Click 'Place Order' to trade. Orders are matched automatically."}
+                        Click 'Place Order' to trade. Orders are matched automatically.
                      </p>
                 </div>
-
-                <!-- Compliance Widget -->
-                ${(() => {
-            return `<div id="compliance-widget" class="card mt-4 border border-warning" style="background: rgba(255, 165, 0, 0.05);">Loading compliance data...</div>`;
-        })()}
+                ` : ''}
                 
-                <script>
-                    (async () => {
-                        try {
-                            const status = await dataService.getComplianceStatus(currentUser);
-                            const container = document.getElementById('compliance-widget');
-                            if (!container) return;
-                            
-                            const isETS = '${marketData.symbol}' === 'EUA';
-                            if (isETS) {
-                                const shortfall = status.euaShortage;
-                                container.innerHTML = \`
-                                    <h3 class="font-bold mb-2 text-sm">⚠️ COMPLIANCE STATUS</h3>
-                                    <div class="mb-2">
-                                        <div class="text-xs text-muted">EUA Shortage</div>
-                                        <div class="text-xl font-bold \${shortfall > 0 ? 'text-danger' : 'text-success'}">\${shortfall.toLocaleString()}</div>
-                                    </div>
-                                    \${shortfall > 0 ? \`<button onclick="handleAutoFillShortage(\${shortfall}, 'EUA')" class="btn btn-sm btn-primary w-full">Buy Shortage</button>\` : '<div class="text-xs text-success">Compliant</div>'}
-                                \`;
-                            } else {
-                                const penalty = status.fuelEuPenalty;
-                                const balance = status.fuelEuBalance;
-                                container.innerHTML = \`
-                                    <h3 class="font-bold mb-2 text-sm">⚠️ COMPLIANCE STATUS</h3>
-                                    <div class="mb-2">
-                                        <div class="text-xs text-muted">Compliance Balance</div>
-                                        <div class="text-xl font-bold \${balance < 0 ? 'text-danger' : 'text-success'}">\${balance.toLocaleString()} MJ</div>
-                                    </div>
-                                    <div class="mb-2">
-                                        <div class="text-xs text-muted">Projected Penalty</div>
-                                        <div class="text-xl font-bold \${penalty > 0 ? 'text-danger' : 'text-success'}">€\${penalty.toLocaleString()}</div>
-                                    </div>
-                                \`;
-                            }
-                        } catch (e) { console.error(e); }
-                    })();
-
-                    // Global Handlers for Transaction
-                    window.handleRequestTransaction = async (id) => {
-                        window.loading.show("Requesting transaction...");
-                        const res = await window.tradingService.requestTransaction(id);
-                        window.loading.hide();
-                        if (res.success) {
-                            window.toast.success(res.message);
-                            // Refresh logic: re-render current view if possible
-                            if (typeof renderTradingFuelEU === 'function') {
-                                renderTradingFuelEU();
-                            }
-                        } else {
-                            window.toast.error(res.message);
-                        }
-                    };
-
-                    window.handleAgreeTransaction = async (id) => {
-                         if (!confirm("Request this transaction? This will notify all parties.")) return;
-                         window.loading.show("Processing request...");
-                         const res = await window.tradingService.agreeTransaction(id);
-                         window.loading.hide();
-                         if (res.success) {
-                             window.toast.success(res.message);
-                             if (typeof renderTradingFuelEU === 'function') {
-                                 renderTradingFuelEU();
-                             }
-                         } else {
-                             window.toast.error(res.message);
-                         }
-                    };
-
-
-
-                    window.handleAcceptQuoteWithEmail = async (orderId, traderEmail, price) => {
-                        if (!confirm('Accept quote of €' + price + ' from this trader?')) return;
-
-                        let phone = currentUser.phone;
-                        if (!phone) {
-                            phone = prompt("Please enter your contact phone number for the trader:");
-                            if (!phone) {
-                                window.toast.error("Phone number is required to proceed.");
-                                return;
-                            }
-                        }
-
-                        window.loading.show("Processing acceptance...");
-                        const res = await window.tradingService.acceptQuote(orderId, traderEmail, phone);
-                        window.loading.hide();
-                        
-                        if (res.success) {
-                            window.toast.success("Quote accepted. Trader notified.");
-                            // Update currentUser phone if it was just entered (optimistic update)
-                            // Ideally we fetch user again, but this is fine for session
-                            if (!currentUser.phone) currentUser.phone = phone;
-                            
-                            // Refresh logic
-                            if (typeof renderTradingETS === 'function') {
-                                renderTradingETS();
-                            }
-                        } else {
-                            window.toast.error(res.message || "Failed to accept quote");
-                        }
-                    };
-
-                    window.handleUpdateStatus = async (id, status) => {
-                         // window.loading.show("Updating process..."); 
-                         const res = await window.tradingService.updateStatus(id, status);
-                         if (res) {
-                              window.toast.success("Process status updated");
-                         } else {
-                              window.toast.error("Failed to update process status");
-                         }
-                    };
-                </script>
             </div>
         </div>
     `;
 
-    container.innerHTML = html;
+        container.innerHTML = html;
+
+    } catch (e) {
+        console.error("Critical Error in renderTradingView:", e);
+        container.innerHTML = `
+            <div class="p-8 text-center text-danger">
+                <h3 class="font-bold mb-2">Error Loading Market Data</h3>
+                <p class="text-sm mb-4">${e.message}</p>
+                <button class="btn btn-primary btn-sm" onclick="window.location.reload()">Reload Page</button>
+            </div>
+        `;
+    }
+
+
 
 
     // Initialize Chart
@@ -1674,11 +1819,11 @@ function renderTradingHistory() {
                 </div>
                 <div>
                     <label class="input-label">Start Date</label>
-                    <input type="date" id="filter-start-date" class="input-field" onchange="applyTradingFilters()">
+                    <input type="text" id="filter-start-date" class="input-field" placeholder="YYYY.MM.DD" onfocus="(this.type='date')" onblur="(this.value ? this.type='date' : this.type='text')" onchange="applyTradingFilters()">
                 </div>
                 <div>
                     <label class="input-label">End Date</label>
-                    <input type="date" id="filter-end-date" class="input-field" onchange="applyTradingFilters()">
+                    <input type="text" id="filter-end-date" class="input-field" placeholder="YYYY.MM.DD" onfocus="(this.type='date')" onblur="(this.value ? this.type='date' : this.type='text')" onchange="applyTradingFilters()">
                 </div>
             </div>
         </div>
@@ -1698,7 +1843,7 @@ function renderTradingHistoryTable(history) {
     if (!container) return;
 
     if (history.length === 0) {
-        container.innerHTML = '<div class="p-8 text-center text-muted">No trading history available.</div>';
+        container.innerHTML = '<div class="text-center p-8 text-muted">No trading history available</div>';
         return;
     }
 
@@ -1706,14 +1851,13 @@ function renderTradingHistoryTable(history) {
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
             <thead style="background: rgba(255,255,255,0.05); color: var(--color-text-muted);">
                 <tr>
-                    <th class="p-3">Date & Time</th>
+                    <th class="p-3">Date</th>
                     <th class="p-3">Symbol</th>
                     <th class="p-3">Type</th>
                     <th class="p-3">Quantity</th>
                     <th class="p-3">Price</th>
                     <th class="p-3">Total</th>
-                    <th class="p-3">Buyer</th>
-                    <th class="p-3">Seller</th>
+                    <th class="p-3">Counterparty</th>
                 </tr>
             </thead>
             <tbody>
@@ -1721,40 +1865,29 @@ function renderTradingHistoryTable(history) {
 
     history.forEach(trade => {
         const date = new Date(trade.timestamp);
-        const typeColor = trade.type === 'BUY' ? 'success' : trade.type === 'SELL' ? 'danger' : 'primary';
+        const dateStr = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+        const typeClass = trade.type === 'BUY' ? 'text-success' : (trade.type === 'SELL' ? 'text-danger' : 'text-info');
 
         html += `
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <td class="p-3">
-                    <div class="text-sm">${date.toLocaleDateString()}</div>
-                    <div class="text-xs text-muted">${date.toLocaleTimeString()}</div>
-                </td>
-                <td class="p-3">
-                    <span class="badge" style="background: var(--color-primary); padding: 2px 8px; border-radius: 4px;">
-                        ${trade.symbol}
-                    </span>
-                </td>
-                <td class="p-3">
-                    <span class="badge" style="background: var(--color-${typeColor}); color: white; padding: 2px 8px; border-radius: 4px;">
-                        ${trade.type || 'MATCH'}
-                    </span>
-                </td>
-                <td class="p-3 font-bold">${trade.quantity.toLocaleString()}</td>
-                <td class="p-3">€${trade.price.toFixed(2)}</td>
-                <td class="p-3 font-bold">€${(trade.quantity * trade.price).toFixed(2)}</td>
-                <td class="p-3 text-sm">${trade.buyer || 'N/A'}</td>
-                <td class="p-3 text-sm">${trade.seller || 'N/A'}</td>
+            <tr style="border-top: 1px solid var(--color-border);">
+                <td class="p-3 text-sm text-muted">${dateStr}</td>
+                <td class="p-3 font-bold">${trade.symbol}</td>
+                <td class="p-3 ${typeClass} font-bold">${trade.type || 'MATCH'}</td>
+                <td class="p-3">${trade.quantity}</td>
+                <td class="p-3">€${typeof trade.price === 'number' ? trade.price.toFixed(2) : trade.price}</td>
+                <td class="p-3">€${(trade.quantity * trade.price).toFixed(2)}</td>
+                <td class="p-3 text-xs text-muted">${trade.type === 'BUY' ? (trade.seller || 'Market') : (trade.buyer || 'Market')}</td>
             </tr>
         `;
     });
 
-    html += `
-            </tbody>
-        </table>
-    `;
-
+    html += `</tbody></table>`;
     container.innerHTML = html;
 }
+
+// Trading History Handlers
+
+
 
 window.applyTradingFilters = function () {
     const symbol = document.getElementById('filter-symbol').value;
@@ -1799,9 +1932,27 @@ function renderReports() {
 // Modal Logic for Trading
 // Inline Order Handler
 // Inline Order Handler
-window.handlePlaceOrderInline = async function (event) {
-    event.preventDefault();
-    const form = event.target;
+window.isOrdering = false;
+window.submitOrderSafe = async function (event) {
+    // 1. Prevent Double Submission (Global Lock)
+    if (window.isOrdering) return;
+    window.isOrdering = true;
+
+    const btn = event.target.closest('button');
+    const form = btn ? btn.closest('form') : event.target.closest('form');
+
+    // Fallback if triggered incorrectly
+    if (!form) {
+        window.isOrdering = false;
+        return;
+    }
+
+    const submitBtn = form.querySelector('button'); // The button that was clicked or first button
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.dataset.originalText = submitBtn.innerText;
+        submitBtn.innerText = 'Processing...';
+    }
 
     // Determine Order Type first
     let type = 'BUY';
@@ -1827,6 +1978,11 @@ window.handlePlaceOrderInline = async function (event) {
 
     if (!quantity || quantity <= 0) {
         toast.error('Invalid Quantity');
+        window.isOrdering = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = submitBtn.dataset.originalText;
+        }
         return;
     }
 
@@ -1840,25 +1996,35 @@ window.handlePlaceOrderInline = async function (event) {
         owner: auth.currentUser ? auth.currentUser.name : 'Guest'
     };
 
-    const result = await tradingService.placeOrder(orderData);
-    loading.hide();
+    try {
+        const result = await tradingService.placeOrder(orderData);
+        loading.hide();
 
-    if (result) {
-        toast.success(`Order Placed: ${type} ${quantity} ${symbol}`);
-        form.reset(); // clear form
+        if (result) {
+            toast.success(`Order Placed: ${type} ${quantity} ${symbol}`);
+            form.reset(); // clear form
 
-        // Restore default values if any (like symbol)
-        // Actually reset clears hidden inputs too if they were changed? No, hidden inputs preserve value Usually.
-        // But value attribute is static.
+            // Restore default values if any (like symbol)
+            // Actually reset clears hidden inputs too if they were changed? No, hidden inputs preserve value Usually.
+            // But value attribute is static.
 
-        // Refresh Current View
-        const activeLink = document.querySelector('.nav-link.active');
-        if (activeLink) {
-            if (activeLink.dataset.route === 'trading-ets') renderTradingETS();
-            if (activeLink.dataset.route === 'trading-fueleu') renderTradingFuelEU();
+
+        } else {
+            toast.error('Failed to place order');
         }
-    } else {
-        toast.error('Failed to place order');
+    } catch (e) {
+        console.error(e);
+        toast.error('Error placing order');
+        loading.hide();
+    } finally {
+        setTimeout(() => {
+            window.isOrdering = false;
+        }, 500);
+
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = submitBtn.dataset.originalText;
+        }
     }
 }; window.addEventListener('market-updated', () => {
     const activeLink = document.querySelector('.nav-link.active');
@@ -2405,8 +2571,7 @@ window.handleExportPDF = function () {
             type: lastCalculationResult.type,
             inputs: lastCalculationResult.input,
             fuels: lastCalculationResult.input.fuelList,
-            result: Object.entries(lastCalculationResult.result).map(([k, v]) => `${k}: ${v}`).join('\n'),
-            details: lastCalculationResult.result
+            result: lastCalculationResult.result // Pass object directly
         };
         exportManager.exportToPDF(calcData);
     }
@@ -2418,8 +2583,7 @@ window.handleExportExcel = function () {
             type: lastCalculationResult.type,
             inputs: lastCalculationResult.input,
             fuels: lastCalculationResult.input.fuelList,
-            result: Object.entries(lastCalculationResult.result).map(([k, v]) => `${k}: ${v}`).join('\n'),
-            details: lastCalculationResult.result
+            result: lastCalculationResult.result // Pass object directly
         };
         exportManager.exportToExcel(calcData);
     }
@@ -2711,7 +2875,7 @@ window.fillOrderForm = function (type, price, quantity) {
     }
 
     // Visual feedback (optional)
-    const form = document.querySelector('form[onsubmit="handlePlaceOrderInline(event)"]');
+    const form = document.querySelector('form[onsubmit="submitOrderSafe(event)"]');
     if (form) {
         form.classList.add('ring-2', 'ring-primary');
         setTimeout(() => form.classList.remove('ring-2', 'ring-primary'), 300);
@@ -2965,47 +3129,37 @@ async function renderAdmin() {
     window.handleSaveTraderContacts = async function (event) {
         if (event) event.preventDefault();
 
+        // ETS Traders (Dynamic List)
+        const etsTraders = [];
+        const etsRows = document.querySelectorAll('.ets-trader-row');
+
+        etsRows.forEach(row => {
+            etsTraders.push({
+                name: row.querySelector('.ets-name').value,
+                loginId: row.querySelector('.ets-login-id').value, // Used for Auth Account
+                email: row.querySelector('.ets-email').value,     // Used for Notification
+                company: row.querySelector('.ets-company').value,
+                phone: row.querySelector('.ets-phone').value
+            });
+        });
+
+        // FuelEU Traders (Dynamic List)
+        const fuelEuTraders = [];
+        const fuelEuRows = document.querySelectorAll('.fueleu-trader-row');
+
+        fuelEuRows.forEach(row => {
+            fuelEuTraders.push({
+                name: row.querySelector('.fueleu-name').value,
+                loginId: row.querySelector('.fueleu-login-id').value,
+                email: row.querySelector('.fueleu-email').value,
+                company: row.querySelector('.fueleu-company').value,
+                phone: row.querySelector('.fueleu-phone').value
+            });
+        });
+
         const data = {
-            ETS: {
-                "Trader A": {
-                    name: document.getElementById('ETS_Trader A_name').value,
-                    email: document.getElementById('ETS_Trader A_email').value,
-                    company: document.getElementById('ETS_Trader A_company').value,
-                    phone: document.getElementById('ETS_Trader A_phone').value
-                },
-                "Trader B": {
-                    name: document.getElementById('ETS_Trader B_name').value,
-                    email: document.getElementById('ETS_Trader B_email').value,
-                    company: document.getElementById('ETS_Trader B_company').value,
-                    phone: document.getElementById('ETS_Trader B_phone').value
-                },
-                "Trader C": {
-                    name: document.getElementById('ETS_Trader C_name').value,
-                    email: document.getElementById('ETS_Trader C_email').value,
-                    company: document.getElementById('ETS_Trader C_company').value,
-                    phone: document.getElementById('ETS_Trader C_phone').value
-                }
-            },
-            FuelEU: {
-                "AA Trader": {
-                    name: document.getElementById('FuelEU_AA Trader_name').value,
-                    email: document.getElementById('FuelEU_AA Trader_email').value,
-                    company: document.getElementById('FuelEU_AA Trader_company').value,
-                    phone: document.getElementById('FuelEU_AA Trader_phone').value
-                },
-                "BB Trader": {
-                    name: document.getElementById('FuelEU_BB Trader_name').value,
-                    email: document.getElementById('FuelEU_BB Trader_email').value,
-                    company: document.getElementById('FuelEU_BB Trader_company').value,
-                    phone: document.getElementById('FuelEU_BB Trader_phone').value
-                },
-                "CC Trader": {
-                    name: document.getElementById('FuelEU_CC Trader_name').value,
-                    email: document.getElementById('FuelEU_CC Trader_email').value,
-                    company: document.getElementById('FuelEU_CC Trader_company').value,
-                    phone: document.getElementById('FuelEU_CC Trader_phone').value
-                }
-            }
+            ETS: etsTraders,
+            FuelEU: fuelEuTraders
         };
 
         try {
@@ -3035,16 +3189,14 @@ async function renderAdmin() {
         "Trader C": { name: "", email: "" }
     };
     let emailConfig = { user: '', pass: '' };
-    let dbStatus = { status: 'disconnected' };
 
     try {
-        const [uRes, euRes, manRes, contactRes, emailRes, dbRes] = await Promise.all([
+        const [uRes, euRes, manRes, contactRes, emailRes] = await Promise.all([
             fetch('/api/admin/users'),
             fetch('/api/data/eu-data'),
             fetch('/api/admin/eua-manual'),
             fetch('/api/admin/trader-contacts'),
-            fetch('/api/admin/email-config'),
-            fetch('/api/admin/db-status')
+            fetch('/api/admin/email-config')
         ]);
 
         const uJson = await uRes.json();
@@ -3059,9 +3211,6 @@ async function renderAdmin() {
         const emailJson = await emailRes.json();
         if (emailJson.success) emailConfig = emailJson.config || { user: '', pass: '' };
 
-        const dbJson = await dbRes.json();
-        if (dbJson.success) dbStatus = dbJson;
-
         window.tempEUDataReal = euData; // store for render
     } catch (e) {
         console.error("Failed to fetch admin data", e);
@@ -3070,12 +3219,7 @@ async function renderAdmin() {
 
     // Admin Container
     contentArea.innerHTML = `
-        <div class="flex items-center gap-3 mb-4">
-            <h2 class="text-lg font-bold">Admin Administration</h2>
-            <span class="badge ${dbStatus.status === 'connected' ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'} text-xs px-2 py-1 rounded flex items-center gap-1">
-                ${dbStatus.status === 'connected' ? '🟢 MongoDB Connected' : '🔴 MongoDB Disconnected'}
-            </span>
-        </div>
+        <h2 class="text-lg font-bold mb-4">Admin Administration</h2>
         
         <!-- Admin Tabs -->
         <div class="flex gap-4 mb-6 border-b border-gray-700">
@@ -3130,34 +3274,69 @@ async function renderAdmin() {
                     <p class="text-xs text-muted mb-4">Specify the contact details for ETS trade confirmations.</p>
                     
                     <!-- ETS Traders -->
-                    ${traderContacts.ETS ? Object.keys(traderContacts.ETS).map(key => `
-                        <div class="mb-3 border-b border-white/5 pb-2">
-                            <div class="text-sm font-bold text-primary mb-1">${key}</div>
-                            <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                                <div>
-                                    <label class="text-xs text-muted">Name</label>
-                                    <input type="text" id="ETS_${key}_name" class="input-field py-1 text-sm" value="${traderContacts.ETS[key].name || ''}" placeholder="Contact Name">
+                    <div id="ets-traders-list">
+                        ${(() => {
+            let traders = traderContacts.ETS || [];
+            // Migration: Handle Legacy Object
+            if (!Array.isArray(traders)) {
+                traders = Object.keys(traders).map(k => ({
+                    name: traders[k].name,
+                    email: traders[k].email,
+                    company: traders[k].company,
+                    phone: traders[k].phone
+                }));
+            }
+
+            // Render Rows
+            return traders.map((t, i) => {
+                const autoLoginId = `Trading${i + 1}@cofleeter.com`;
+                const displayLoginId = t.loginId || autoLoginId;
+
+                return `
+                            <div class="mb-3 border-b border-white/5 pb-2 ets-trader-row">
+                                <div class="flex justify-between items-center mb-1">
+                                    <div class="text-sm font-bold text-primary">Trader #${i + 1}</div>
+                                    <button onclick="deleteEtsTraderRow(this)" class="text-xs text-danger hover:text-red-400">Delete</button>
                                 </div>
-                                <div>
-                                    <label class="text-xs text-muted">Email</label>
-                                    <input type="email" id="ETS_${key}_email" class="input-field py-1 text-sm" value="${traderContacts.ETS[key].email || ''}" placeholder="contact@email.com">
+                                <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                    <div>
+                                        <label class="text-xs text-muted">Name</label>
+                                        <input type="text" class="input-field py-1 text-sm ets-name" value="${t.name || ''}" placeholder="Contact Name">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-muted">App Login ID (Read-Only)</label>
+                                        <input type="text" class="input-field py-1 text-sm ets-login-id bg-white/5 text-muted cursor-not-allowed" value="${displayLoginId}" readonly>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                    <div class="col-span-2">
+                                        <label class="text-xs text-muted">Notification Email (Real)</label>
+                                        <input type="email" class="input-field py-1 text-sm ets-email" value="${t.email || ''}" placeholder="real-person@company.com">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                    <div>
+                                        <label class="text-xs text-muted">Company</label>
+                                        <input type="text" class="input-field py-1 text-sm ets-company" value="${t.company || ''}" placeholder="Company Name">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-muted">Phone</label>
+                                        <input type="text" class="input-field py-1 text-sm ets-phone" value="${t.phone || ''}" placeholder="+1 234 567 890">
+                                    </div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                                <div>
-                                    <label class="text-xs text-muted">Company</label>
-                                    <input type="text" id="ETS_${key}_company" class="input-field py-1 text-sm" value="${traderContacts.ETS[key].company || ''}" placeholder="Company Name">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-muted">Phone</label>
-                                    <input type="text" id="ETS_${key}_phone" class="input-field py-1 text-sm" value="${traderContacts.ETS[key].phone || ''}" placeholder="+1 234 567 890">
-                                </div>
-                            </div>
-                        </div>
-                    `).join('') : '<div class="text-danger">Error loading ETS contacts</div>'}
+                            `;
+            }).join('');
+        })()}
+                    </div>
                     
-                    <button onclick="window.handleSaveTraderContacts()" class="btn btn-sm btn-primary w-full mt-2">Save ETS Contacts</button>
+                    <div class="flex gap-2 mt-2">
+                        <button onclick="addEtsTraderRow()" class="btn btn-sm btn-outline flex-1 border-dashed">+ Add Trader</button>
+                        <button onclick="window.handleSaveTraderContacts()" class="btn btn-sm btn-primary flex-1">Save ETS Contacts</button>
+                    </div>
                 </div>
+
+
 
                 <!-- 4. FuelEU Trader Notification Contacts -->
                 <div class="card mb-4" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(168, 85, 247, 0.1));">
@@ -3165,33 +3344,62 @@ async function renderAdmin() {
                      <p class="text-xs text-muted mb-4">Specify the contact details for FuelEU trade confirmations.</p>
                     
                     <!-- FuelEU Traders -->
-                    ${traderContacts.FuelEU ? Object.keys(traderContacts.FuelEU).map(key => `
-                        <div class="mb-3 border-b border-white/5 pb-2">
-                            <div class="text-sm font-bold text-success mb-1">${key}</div>
-                            <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                                <div>
-                                    <label class="text-xs text-muted">Name</label>
-                                    <input type="text" id="FuelEU_${key}_name" class="input-field py-1 text-sm" value="${traderContacts.FuelEU[key].name || ''}" placeholder="Contact Name">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-muted">Email</label>
-                                    <input type="email" id="FuelEU_${key}_email" class="input-field py-1 text-sm" value="${traderContacts.FuelEU[key].email || ''}" placeholder="contact@email.com">
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                                <div>
-                                    <label class="text-xs text-muted">Company</label>
-                                    <input type="text" id="FuelEU_${key}_company" class="input-field py-1 text-sm" value="${traderContacts.FuelEU[key].company || ''}" placeholder="Company Name">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-muted">Phone</label>
-                                    <input type="text" id="FuelEU_${key}_phone" class="input-field py-1 text-sm" value="${traderContacts.FuelEU[key].phone || ''}" placeholder="+1 234 567 890">
-                                </div>
-                            </div>
-                        </div>
-                    `).join('') : '<div class="text-danger">Error loading FuelEU contacts</div>'}
+                    <div id="fueleu-traders-list">
+                        ${(() => {
+            let traders = traderContacts.FuelEU || [];
+            // Migration or Fallback
+            if (!Array.isArray(traders) && typeof traders === 'object') {
+                traders = Object.values(traders);
+            } else if (!Array.isArray(traders)) {
+                traders = [];
+            }
 
-                    <button onclick="window.handleSaveTraderContacts()" class="btn btn-sm btn-primary w-full mt-2">Save FuelEU Contacts</button>
+            return traders.map((t, i) => {
+                const autoLoginId = `FuelEU${i + 1}@cofleeter.com`;
+                const displayLoginId = t.loginId || autoLoginId;
+
+                return `
+                                <div class="mb-3 border-b border-white/5 pb-2 fueleu-trader-row">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <div class="text-sm font-bold text-success">FuelEU Trader #${i + 1}</div>
+                                        <button onclick="deleteFuelEuTraderRow(this)" class="text-xs text-danger hover:text-red-400">Delete</button>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                        <div>
+                                            <label class="text-xs text-muted">Name</label>
+                                            <input type="text" class="input-field py-1 text-sm fueleu-name" value="${t.name || ''}" placeholder="Contact Name">
+                                        </div>
+                                        <div>
+                                            <label class="text-xs text-muted">App Login ID (Read-Only)</label>
+                                            <input type="text" class="input-field py-1 text-sm fueleu-login-id bg-white/5 text-muted cursor-not-allowed" value="${displayLoginId}" readonly>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                        <div class="col-span-2">
+                                            <label class="text-xs text-muted">Notification Email (Real)</label>
+                                            <input type="email" class="input-field py-1 text-sm fueleu-email" value="${t.email || ''}" placeholder="real-person@company.com">
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                        <div>
+                                            <label class="text-xs text-muted">Company</label>
+                                            <input type="text" class="input-field py-1 text-sm fueleu-company" value="${t.company || ''}" placeholder="Company Name">
+                                        </div>
+                                        <div>
+                                            <label class="text-xs text-muted">Phone</label>
+                                            <input type="text" class="input-field py-1 text-sm fueleu-phone" value="${t.phone || ''}" placeholder="+1 234 567 890">
+                                        </div>
+                                    </div>
+                                </div>
+                                `;
+            }).join('');
+        })()}
+                    </div>
+
+                    <div class="flex gap-2 mt-2">
+                        <button onclick="addFuelEuTraderRow()" class="btn btn-sm btn-outline flex-1 border-dashed">+ Add Trader</button>
+                        <button onclick="window.handleSaveTraderContacts()" class="btn btn-sm btn-primary flex-1">Save FuelEU Contacts</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3375,8 +3583,11 @@ async function renderAdmin() {
                         </thead>
                         <tbody>
                             ${users.map(u => `
-                                <tr class="border-b border-gray-800">
-                                    <td class="p-3 font-bold">${u.name || '-'}</td>
+                                <tr class="border-b border-gray-800 ${u.suspended ? 'opacity-50 grayscale' : ''}">
+                                    <td class="p-3 font-bold">
+                                        ${u.name || '-'}
+                                        ${u.suspended ? '<span class="text-xs text-danger ml-2">[Suspended]</span>' : ''}
+                                    </td>
                                     <td class="p-3 text-muted">${u.email}</td>
                                     <td class="p-3"><span class="badge ${u.role === 'ADMIN' ? 'bg-primary' : 'bg-secondary'}">${u.role}</span></td>
                                     <td class="p-3">
@@ -3385,11 +3596,17 @@ async function renderAdmin() {
                                         </div>
                                     </td>
                                     <td class="p-3 text-right flex justify-end gap-2">
+                                        <button onclick="handleToggleUserStatus('${u.id}', ${u.suspended})" class="btn btn-xs ${u.suspended ? 'btn-success' : 'btn-outline text-warning'}" title="${u.suspended ? 'Activate User' : 'Suspend User'}">
+                                            ${u.suspended ? '✅ Active' : '⛔ Stop'}
+                                        </button>
                                         <button onclick="openPermissionModal('${u.id}', '${u.name}', '${(u.permissions || []).join(',')}')" class="btn btn-xs btn-outline" title="Manage Permissions">
                                             🔒 Perms
                                         </button>
                                         <button onclick="handleResetPassword('${u.id}')" class="btn btn-xs btn-outline text-warning" title="Reset Password" ${u.role === 'ADMIN' && u.email.includes('cfadmin') ? 'disabled' : ''}>
                                             🔑 Reset PW
+                                        </button>
+                                        <button onclick="handleDeleteUser('${u.id}')" class="btn btn-xs btn-outline text-danger" title="Delete User" ${u.role === 'ADMIN' && u.email.includes('cfadmin') ? 'disabled' : ''}>
+                                            🗑️ Del
                                         </button>
                                     </td>
                                 </tr>
@@ -3850,6 +4067,53 @@ window.handleResetPassword = async function (userId) {
     }
 };
 
+
+
+window.handleDeleteUser = async function (userId) {
+    if (!confirm("Are you sure you want to PERMANENTLY delete this user? This cannot be undone.")) return;
+
+    try {
+        const res = await fetch('/api/admin/delete-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetUserId: userId, currentUserId: currentUser.id })
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast.success("User deleted successfully");
+            renderAdmin();
+        } else {
+            toast.error(data.message || "Failed to delete user");
+        }
+    } catch (e) {
+        console.error(e);
+        toast.error("Error calling delete API");
+    }
+};
+
+window.handleToggleUserStatus = async function (userId, currentStatus) {
+    const action = currentStatus ? "ACTIVATE" : "SUSPEND";
+    if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+
+    try {
+        const res = await fetch('/api/admin/toggle-user-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetUserId: userId })
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast.success(data.message);
+            renderAdmin();
+        } else {
+            toast.error(data.message || "Failed to toggle status");
+        }
+    } catch (e) {
+        console.error(e);
+        toast.error("Error calling status API");
+    }
+};
+
 window.cancelFuelEdit = function () {
     tempFuelData = null;
     document.getElementById('btn-edit-fuel').classList.remove('hidden');
@@ -4249,4 +4513,121 @@ window.handleRestoreBackup = async function () {
         }
     };
     reader.readAsText(file);
+};
+
+// Sort Handler for ETS Trading
+window.setQuoteSort = function (mode) {
+    window.currentQuoteSort = mode;
+    // Re-render if on ETS page
+    const activeLink = document.querySelector('.nav-link.active');
+    if (activeLink && activeLink.dataset.route === 'trading-ets') {
+        if (typeof renderTradingETS === 'function') {
+            renderTradingETS();
+        } else {
+            // Fallback: manually reload view logic or just reload page
+        }
+    }
+};
+
+// ETS Trader Row Management UI Handlers
+window.addEtsTraderRow = function () {
+    const container = document.getElementById('ets-traders-list');
+    // Count existing to guess index
+    const index = container.querySelectorAll('.ets-trader-row').length + 1;
+    const div = document.createElement('div');
+    div.className = 'mb-3 border-b border-white/5 pb-2 ets-trader-row';
+    div.innerHTML = `
+        <div class="flex justify-between items-center mb-1">
+            <div class="text-sm font-bold text-primary">Trader #${index}</div>
+            <button onclick="deleteEtsTraderRow(this)" class="text-xs text-danger hover:text-red-400">Delete</button>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div>
+                <label class="text-xs text-muted">Name</label>
+                <input type="text" class="input-field py-1 text-sm ets-name" value="Trader #${index}" placeholder="Contact Name">
+            </div>
+            <div>
+                <label class="text-xs text-muted">App Login ID (Read-Only)</label>
+                <input type="text" class="input-field py-1 text-sm ets-login-id bg-white/5 text-muted cursor-not-allowed" value="Trading${index}@cofleeter.com" readonly>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="col-span-2">
+                <label class="text-xs text-muted">Notification Email (Real)</label>
+                <input type="email" class="input-field py-1 text-sm ets-email" placeholder="real-person@company.com">
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div>
+                <label class="text-xs text-muted">Company</label>
+                <input type="text" class="input-field py-1 text-sm ets-company" value="Co-Fleeter Traders" placeholder="Company Name">
+            </div>
+            <div>
+                <label class="text-xs text-muted">Phone</label>
+                <input type="text" class="input-field py-1 text-sm ets-phone" placeholder="+1 234 567 890">
+            </div>
+        </div>
+   `;
+    container.appendChild(div);
+};
+
+window.deleteEtsTraderRow = function (btn) {
+    if (confirm('Remove this trader?')) {
+        btn.closest('.ets-trader-row').remove();
+        // Renumbering (Optional but good for sequential)
+        const rows = document.querySelectorAll('.ets-trader-row');
+        rows.forEach((row, i) => {
+            row.querySelector('.text-primary').textContent = `Trader #${i + 1}`;
+        });
+    }
+};
+
+window.addFuelEuTraderRow = function () {
+    const container = document.getElementById('fueleu-traders-list');
+    const index = container.querySelectorAll('.fueleu-trader-row').length + 1;
+    const div = document.createElement('div');
+    div.className = 'mb-3 border-b border-white/5 pb-2 fueleu-trader-row';
+    div.innerHTML = `
+        <div class="flex justify-between items-center mb-1">
+            <div class="text-sm font-bold text-success">FuelEU Trader #${index}</div>
+            <button onclick="deleteFuelEuTraderRow(this)" class="text-xs text-danger hover:text-red-400">Delete</button>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div>
+                <label class="text-xs text-muted">Name</label>
+                <input type="text" class="input-field py-1 text-sm fueleu-name" value="FuelEU Trader #${index}" placeholder="Contact Name">
+            </div>
+            <div>
+                <label class="text-xs text-muted">App Login ID (Read-Only)</label>
+                <input type="text" class="input-field py-1 text-sm fueleu-login-id bg-white/5 text-muted cursor-not-allowed" value="FuelEU${index}@cofleeter.com" readonly>
+            </div>
+        </div>
+         <div class="grid grid-cols-2 gap-2 mb-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="col-span-2">
+                <label class="text-xs text-muted">Notification Email (Real)</label>
+                <input type="email" class="input-field py-1 text-sm fueleu-email" placeholder="real-person@company.com">
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div>
+                <label class="text-xs text-muted">Company</label>
+                <input type="text" class="input-field py-1 text-sm fueleu-company" value="Co-Fleeter Traders" placeholder="Company Name">
+            </div>
+            <div>
+                <label class="text-xs text-muted">Phone</label>
+                <input type="text" class="input-field py-1 text-sm fueleu-phone" placeholder="+1 234 567 890">
+            </div>
+        </div>
+   `;
+    container.appendChild(div);
+};
+
+window.deleteFuelEuTraderRow = function (btn) {
+    if (confirm('Remove this FuelEU trader?')) {
+        btn.closest('.fueleu-trader-row').remove();
+        const rows = document.querySelectorAll('.fueleu-trader-row');
+        rows.forEach((row, i) => {
+            row.querySelector('.text-success').textContent = `FuelEU Trader #${i + 1}`;
+        });
+    }
 };

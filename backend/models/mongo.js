@@ -49,5 +49,5 @@ module.exports = {
     User,
     Fleet,
     GlobalData,
-    mongoose // Export mongoose instance
+    mongoose // Export mongoose instance for status checks
 };

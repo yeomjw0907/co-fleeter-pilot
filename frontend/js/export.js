@@ -60,7 +60,9 @@ class ExportManager {
 
             doc.setFontSize(10);
             doc.setTextColor(0);
-            doc.text(`Report Generated: ${new Date().toISOString().slice(0, 10)}`, 150, 20);
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+            doc.text(`Report Generated: ${dateStr}`, 150, 20);
 
             doc.setDrawColor(200);
             doc.line(14, 30, 196, 30);

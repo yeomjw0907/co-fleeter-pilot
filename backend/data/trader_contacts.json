@@ -1,42 +1,41 @@
 {
-  "ETS": {
-    "Trader A": {
-      "name": "사과",
-      "email": "sjjoo@hls.co.kr",
-      "company": "A-company",
-      "phone": ""
-    },
-    "Trader B": {
-      "name": "행복",
+  "ETS": [
+    {
+      "name": "Trader #1",
+      "loginId": "Trading1@cofleeter.com",
       "email": "newdynamo77@daum.net",
-      "company": "B-Company",
+      "company": "Co-Fleeter Traders",
       "phone": ""
     },
-    "Trader C": {
-      "name": "",
-      "email": "",
-      "company": "",
-      "phone": ""
+    {
+      "name": "Trader #2",
+      "loginId": "Trading2@cofleeter.com",
+      "email": "sjjoo@hls.co.kr",
+      "company": "Co-Fleeter Traders",
+      "phone": "+821096522792"
     }
-  },
-  "FuelEU": {
-    "AA Trader": {
-      "name": "사과 1",
+  ],
+  "FuelEU": [
+    {
+      "name": "FuelEU Trader #1",
+      "loginId": "FuelEU1@cofleeter.com",
       "email": "sjjoo@hls.com",
       "company": "AA-Company",
       "phone": "1231231311"
     },
-    "BB Trader": {
-      "name": "사과2",
+    {
+      "name": "FuelEU Trader #2",
+      "loginId": "FuelEU2@cofleeter.com",
       "email": "newdynamo77@daum.net",
       "company": "BB-Company",
       "phone": ""
     },
-    "CC Trader": {
-      "name": "",
+    {
+      "name": "FuelEU Trader #3",
+      "loginId": "FuelEU3@cofleeter.com",
       "email": "",
       "company": "",
       "phone": ""
     }
-  }
+  ]
 }

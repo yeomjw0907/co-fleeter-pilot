@@ -80,9 +80,21 @@ exports.createOrder = (req, res) => {
             .map(c => c.email);
 
         if (recipients.length > 0) {
-            const today = new Date().toISOString().split('T')[0];
-            const subject = `[Co-Fleeter] RFQ Notification (${today})`;
-            const text = `견적요청이 접수되었습니다. Co-Fleeter에서 배부된 ID로 접속하여 견적을 진행해 주시기 바랍니다.\n\nAn RFQ has been received.`;
+            const now = new Date();
+            const dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+            const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+            const subject = `[Co-Fleeter] RFQ Notification (${dateStr} ${timeStr})`;
+            const text = `
+[견적 요청 알림]
+새로운 견적 요청(RFQ)이 접수되었습니다.
+Co-Fleeter 시스템에 접속하여 상세 내용을 확인하고 견적을 제출해 주시기 바랍니다.
+■ 요청 수량: ${order.quantity.toLocaleString()} EUA
+--------------------------------------------------
+[RFQ Notification]
+A new Request for Quote (RFQ) has been received.
+Please log in to the Co-Fleeter system to review the details and submit your quote.
+■ Requested Quantity: ${order.quantity.toLocaleString()} EUA
+`;
             emailService.sendEmail(recipients.join(', '), subject, text);
         }
     }
@@ -228,11 +240,24 @@ exports.acceptQuote = (req, res) => {
     order.filledBy = quote.traderName;
 
     // Email
-    let contactEmail = null;
-    const etsTraders = db.traderContacts.ETS || {};
-    if (traderEmail.includes('atrader')) contactEmail = etsTraders["Trader A"]?.email;
-    else if (traderEmail.includes('btrader')) contactEmail = etsTraders["Trader B"]?.email;
-    else if (traderEmail.includes('ctrader')) contactEmail = etsTraders["Trader C"]?.email;
+    // Dynamic Email Logic
+    let contactEmail = traderEmail;
+
+    // Lookup Real Notification Email in Admin Contacts
+    try {
+        const etsTraders = db.traderContacts.ETS || {};
+        const contactList = Array.isArray(etsTraders) ? etsTraders : Object.values(etsTraders);
+
+        // Find contact where loginId matches, OR if legacy/missing loginId, where email matches
+        // But since traderEmail IS the Login ID coming from the Quote Key, we search for loginId/old-email
+        const contact = contactList.find(c => (c.loginId && c.loginId === traderEmail) || (!c.loginId && c.email === traderEmail));
+
+        if (contact && contact.email) {
+            contactEmail = contact.email; // Use the Real Notification Email
+        }
+    } catch (err) {
+        console.error("Error looking up contact email:", err);
+    }
 
     if (contactEmail) {
         // Legacy logic check: order.owner seems to be 'Name' based on order creation
@@ -277,7 +302,7 @@ exports.completeOrder = (req, res) => {
     const { orderId } = req.body;
     const order = db.orders.find(o => o.id === orderId);
     if (!order) return res.status(404).json({ success: false });
-    if (order.status !== 'PROCESSING') return res.status(400).json({ success: false });
+    if (order.status !== 'CONTRACT') return res.status(400).json({ success: false, message: 'Order strictly requires CONTRACT status to complete.' });
 
     order.status = 'FILLED';
     save.trading();
@@ -308,6 +333,24 @@ exports.requestTransaction = (req, res) => {
     const targetOrder = potentialMatches[0]; // Best match
 
     // Update statuses
+    // Constraint: Sell Quantity >= Buy Quantity
+    let sellOrder, buyOrder;
+    if (order.type === 'SELL') {
+        sellOrder = order;
+        buyOrder = targetOrder;
+    } else {
+        sellOrder = targetOrder;
+        buyOrder = order;
+    }
+
+    if (sellOrder.quantity < buyOrder.quantity) {
+        return res.status(400).json({
+            success: false,
+            message: `Cannot request: Sell Quantity (${sellOrder.quantity}) must be >= Buy Quantity (${buyOrder.quantity}).`
+        });
+    }
+
+    // Update statuses
     // Link orders
     order.status = 'REQUESTING';
     order.linkedOrderId = targetOrder.id;
@@ -315,48 +358,34 @@ exports.requestTransaction = (req, res) => {
     targetOrder.status = 'REQUESTED';
     targetOrder.linkedOrderId = order.id;
 
-    // --- Email Notification Logic ---
+    // --- Email Notification Logic (Match Found -> Notify Users) ---
     try {
-        const buyerName = order.type === 'BUY' ? order.owner : targetOrder.owner;
-        const sellerName = order.type === 'SELL' ? order.owner : targetOrder.owner;
+        const buyerName = buyOrder.owner;
+        const sellerName = sellOrder.owner;
 
         const buyerUser = db.users.find(u => u.name === buyerName) || {};
         const sellerUser = db.users.find(u => u.name === sellerName) || {};
 
-        const aaTrader = (db.traderContacts.FuelEU && db.traderContacts.FuelEU["AA Trader"])
-            ? db.traderContacts.FuelEU["AA Trader"]
-            : null;
-
-        if (aaTrader && aaTrader.email) {
-            const today = new Date().toISOString().split('T')[0];
-            const subject = `FuelEU Trading(${today})`;
-
-            const text = `거래 수량을 진행해주세요.
-
-[Buy 정보]
-회사명: ${buyerUser.company || '-'}
-이름: ${buyerUser.name || buyerName}
-이메일: ${buyerUser.email || '-'}
-전화번호: ${buyerUser.phone || '-'}
-
-[Sell 정보]
-회사명: ${sellerUser.company || '-'}
-이름: ${sellerUser.name || sellerName}
-이메일: ${sellerUser.email || '-'}
-전화번호: ${sellerUser.phone || '-'}
-
-Quantity: ${order.quantity}
-Price: €${order.price}`;
-
-            emailService.sendEmail(aaTrader.email, subject, text);
-            console.log(`Email sent to AA Trader (${aaTrader.email}) for Request Transaction`);
+        // Send to Buyer
+        if (buyerUser.email) {
+            const subject = `[Co-Fleeter] Match Found for your Buy Order`;
+            const text = `A matching Sell order has been found for your request.\n\nQuantity: ${buyOrder.quantity}\nPrice: €${buyOrder.price}\n\nPlease log in and proceed to 'AGREE' if you wish to continue to Contract.`;
+            emailService.sendEmail(buyerUser.email, subject, text);
         }
+
+        // Send to Seller
+        if (sellerUser.email) {
+            const subject = `[Co-Fleeter] Request Received for your Sell Order`;
+            const text = `A Buyer has requested a transaction on your order.\n\nRequested Qty: ${buyOrder.quantity}\nPrice: €${sellOrder.price}\n\nPlease log in and 'AGREE' to start the Contract.`;
+            emailService.sendEmail(sellerUser.email, subject, text);
+        }
+
     } catch (e) {
-        console.error("Error sending email in requestTransaction:", e);
+        console.error("Error sending user notifications in requestTransaction:", e);
     }
 
     save.trading();
-    res.json({ success: true, message: 'Transaction requested. Waiting for counterparty agreement.' });
+    res.json({ success: true, message: 'Transaction requested. Notification sent to parties.' });
 };
 
 exports.agreeTransaction = (req, res) => {
@@ -365,6 +394,7 @@ exports.agreeTransaction = (req, res) => {
 
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
     if (order.status !== 'REQUESTED') return res.status(400).json({ success: false, message: 'Order is not in requested state' });
+
 
     const initiatorOrder = db.orders.find(o => o.id === order.linkedOrderId);
     if (!initiatorOrder || initiatorOrder.status !== 'REQUESTING') {
@@ -375,18 +405,60 @@ exports.agreeTransaction = (req, res) => {
         return res.status(400).json({ success: false, message: 'Initiating order not found or invalid.' });
     }
 
-    // Verify matching
-    const matchQty = Math.min(order.quantity, initiatorOrder.quantity);
-    const execPrice = order.price;
+    // Determine Buy/Sell roles
+    let sellOrder, buyOrder;
+    if (order.type === 'SELL') {
+        sellOrder = order;
+        buyOrder = initiatorOrder;
+    } else {
+        sellOrder = initiatorOrder;
+        buyOrder = order;
+    }
 
-    // Set Status to PROCESSING (Waiting for AA Trader execution)
-    order.status = 'PROCESSING';
-    initiatorOrder.status = 'PROCESSING';
+    // Logic for Splitting Sell Order if Sell > Buy
+    // Note: 'order' or 'initiatorOrder' references might point to the Sell Order.
+    // We need to carefully handle the references.
 
-    // --- Email Notification Logic (Mutual Agreement) ---
+    const matchQty = buyOrder.quantity;
+    const execPrice = sellOrder.price; // Sell price governs usually, or established price
+
+    let finalSellOrderId = sellOrder.id;
+
+    if (sellOrder.quantity > buyOrder.quantity) {
+        // PARTIAL FILL SCENARIO
+        const remainingQty = sellOrder.quantity - matchQty;
+
+        // 1. Create New Child Sell Order for the CONTRACT
+        const contractSellOrder = {
+            ...sellOrder,
+            id: 'ord_' + Date.now() + '_sub',
+            quantity: matchQty,
+            status: 'CONTRACT',
+            linkedOrderId: buyOrder.id,
+            timestamp: Date.now() // New timestamp for the contract part? Or keep old? Let's update.
+        };
+        db.orders.unshift(contractSellOrder);
+        finalSellOrderId = contractSellOrder.id;
+
+        // 2. Update Original Sell Order (Remaining Open)
+        sellOrder.quantity = remainingQty;
+        sellOrder.status = 'OPEN';
+        delete sellOrder.linkedOrderId; // Unlink the remaining part
+
+        // 3. Update Buy Order link to the new Child
+        buyOrder.linkedOrderId = contractSellOrder.id;
+
+    } else {
+        // FULL FILL SCENARIO
+        sellOrder.status = 'CONTRACT';
+    }
+
+    buyOrder.status = 'CONTRACT';
+
+    // --- Email Notification Logic (Contract Started -> Notify FuelEU Trader) ---
     try {
-        const buyerName = order.type === 'BUY' ? order.owner : initiatorOrder.owner;
-        const sellerName = order.type === 'SELL' ? order.owner : initiatorOrder.owner;
+        const buyerName = buyOrder.owner;
+        const sellerName = sellOrder.owner;
 
         const buyerUser = db.users.find(u => u.name === buyerName) || {};
         const sellerUser = db.users.find(u => u.name === sellerName) || {};
@@ -395,37 +467,51 @@ exports.agreeTransaction = (req, res) => {
             ? db.traderContacts.FuelEU["AA Trader"]
             : null;
 
+
         if (aaTrader && aaTrader.email) {
-            const today = new Date().toISOString().split('T')[0];
-            const subject = `FuelEU Trading(${today})`; // Same subject as request
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0];
+            const timeStr = now.toTimeString().split(' ')[0];
+            // Subject: [Co-Fleeter] FuelEU RFQ Notification (Date Time)
+            const subject = `[Co-Fleeter] FuelEU RFQ Notification (${dateStr} ${timeStr})`;
 
-            const text = `Both parties have requested the transaction. Please proceed.
+            const text = `FuelEU Transaction Notification / FuelEU 거래 알림
 
-[Buy 정보]
-회사명: ${buyerUser.company || '-'}
-이름: ${buyerUser.name || buyerName}
-이메일: ${buyerUser.email || '-'}
-전화번호: ${buyerUser.phone || '-'}
+Please proceed with FuelEU Pooling.
+FuelEU Pooling을 진행해주세요.
 
-[Sell 정보]
-회사명: ${sellerUser.company || '-'}
-이름: ${sellerUser.name || sellerName}
-이메일: ${sellerUser.email || '-'}
-전화번호: ${sellerUser.phone || '-'}
+Please find the details below for the agreed contract.
+합의된 계약에 대한 세부 내용은 아래와 같습니다.
 
-Quantity: ${matchQty}
-Price: €${execPrice}
-Status: MUTUALLY AGREED (PROCESSING)`;
+[Contract Summary / 체결 요약]
+Quantity (수량): ${matchQty}
+Unit Price (단가): €${execPrice}
+Total Price (총액): €${(matchQty * execPrice).toLocaleString()}
+
+[Buyer Information / 매수자 정보]
+Company (회사): ${buyerUser.company || '-'}
+Name (이름): ${buyerUser.name || buyerName}
+Email (이메일): ${buyerUser.email || '-'}
+Phone (전화번호): ${buyerUser.phone || '-'}
+
+[Seller Information / 매도자 정보]
+Company (회사): ${sellerUser.company || '-'}
+Name (이름): ${sellerUser.name || sellerName}
+Email (이메일): ${sellerUser.email || '-'}
+Phone (전화번호): ${sellerUser.phone || '-'}
+
+Please facilitate the transaction process.
+거래 진행 부탁드립니다.`;
 
             emailService.sendEmail(aaTrader.email, subject, text);
-            console.log(`Email sent to AA Trader (${aaTrader.email}) for Agreed Transaction`);
+            console.log(`Email sent to AA Trader (${aaTrader.email}) for Contract`);
         }
     } catch (e) {
         console.error("Error sending email in agreeTransaction:", e);
     }
 
     save.trading();
-    res.json({ success: true, message: 'Transaction mutually requested. Waiting for FuelEU Trader processing.' });
+    res.json({ success: true, message: 'Contract agreed. FuelEU Trader notified.' });
 };
 
 exports.getEuaHistory = (req, res) => {

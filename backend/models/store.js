@@ -1,5 +1,4 @@
 const fs = require('fs');
-const path = require('path');
 const paths = require('../config/paths');
 const { INITIAL_CII_CONSTANTS } = require('../config/constants');
 const { DEFAULT_ROLE_PERMISSIONS } = require('../config/constants');
@@ -20,16 +19,8 @@ const db = {
     accessLogs: [],
     userData: {}, // { userId: { calculations: [] } }
     traderContacts: {
-        ETS: {
-            "Trader A": { name: "", email: "", company: "", phone: "" },
-            "Trader B": { name: "", email: "", company: "", phone: "" },
-            "Trader C": { name: "", email: "", company: "", phone: "" }
-        },
-        FuelEU: {
-            "AA Trader": { name: "", email: "", company: "", phone: "" },
-            "BB Trader": { name: "", email: "", company: "", phone: "" },
-            "CC Trader": { name: "", email: "", company: "", phone: "" }
-        }
+        ETS: [],
+        FuelEU: {}
     },
     orders: [],
     trades: [],
@@ -62,20 +53,9 @@ function saveJSON(filePath, data) {
     }
 
     try {
-        // Check if file exists and is writable
-        if (fs.existsSync(filePath)) {
-            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-        } else {
-            // Try to create directory if it doesn't exist
-            const dir = path.dirname(filePath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-            }
-            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-        }
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
         return true;
     } catch (e) {
-        // Don't throw error, just log it
         console.warn(`Failed to save ${filePath} (this is OK in production):`, e.message);
         return false;
     }
@@ -122,29 +102,23 @@ async function loadAll() {
             db.trades = loadJSON(paths.TRADES_FILE, []);
             db.pools = loadJSON(paths.POOLS_FILE, []);
         } else {
-            // In production, initialize with empty defaults
             console.log('Production mode: Skipping file system reads');
         }
 
         // 2. Try MongoDB Connection (with timeout)
-        console.log("DEBUG: Checking Mongo URI:", process.env.MONGO_URI ? "EXISTS" : "MISSING");
         if (process.env.MONGO_URI) {
-            console.log("Connecting to MongoDB... (URI found)");
-            console.log("URI Start:", process.env.MONGO_URI.substring(0, 15) + "...");
+            console.log("Connecting to MongoDB...");
             try {
-                // Add timeout to MongoDB connection
                 const connectionPromise = mongo.connectDB(process.env.MONGO_URI);
                 const timeoutPromise = new Promise((resolve) =>
-                    setTimeout(() => resolve(false), 10000) // Increase timeout to 10s for debugging
+                    setTimeout(() => resolve(false), 10000)
                 );
 
                 const connected = await Promise.race([connectionPromise, timeoutPromise]);
-                console.log("Connection Result:", connected);
 
                 if (connected) {
                     console.log("Syncing data from MongoDB...");
                     try {
-                        // Add timeout to data sync
                         const syncPromise = mongo.GlobalData.find({});
                         const syncTimeout = new Promise((_, reject) =>
                             setTimeout(() => reject(new Error('Sync timeout')), 4000)
@@ -154,7 +128,7 @@ async function loadAll() {
 
                         globals.forEach(doc => {
                             const k = doc.key;
-                            if (k === 'users') db.users = doc.data; // Using Global for users too to avoid schema conflicts in hybrid
+                            if (k === 'users') db.users = doc.data;
                             else if (k === 'fleets') db.fleets = doc.data;
                             else if (k === 'fuelData') db.fuelData = doc.data;
                             else if (k === 'euData') db.euData = doc.data;
@@ -170,29 +144,26 @@ async function loadAll() {
                         console.log("MongoDB Sync Complete.");
                     } catch (e) {
                         console.error("MongoDB Sync Failed", e.message);
-                        // Don't throw, continue with defaults
                     }
                 } else {
                     console.warn("MongoDB connection failed or timed out, using defaults");
                 }
             } catch (mongoError) {
                 console.error("MongoDB connection error:", mongoError.message);
-                // Don't throw, continue with defaults
             }
         } else {
             console.warn("MONGO_URI not set, using in-memory defaults");
         }
 
+
         // Rebuild Volume Cache
-        if (Array.isArray(db.trades)) {
-            db.trades.forEach(t => {
-                if (t.type === 'MATCH' || t.type === 'RFQ_MATCH') {
-                    if (!db.executedVolumes[t.symbol]) db.executedVolumes[t.symbol] = {};
-                    const pKey = parseFloat(t.price).toFixed(2);
-                    db.executedVolumes[t.symbol][pKey] = (db.executedVolumes[t.symbol][pKey] || 0) + t.quantity;
-                }
-            });
-        }
+        db.trades.forEach(t => {
+            if (t.type === 'MATCH' || t.type === 'RFQ_MATCH') {
+                if (!db.executedVolumes[t.symbol]) db.executedVolumes[t.symbol] = {};
+                const pKey = parseFloat(t.price).toFixed(2);
+                db.executedVolumes[t.symbol][pKey] = (db.executedVolumes[t.symbol][pKey] || 0) + t.quantity;
+            }
+        });
 
         // Mock Data init for fresh install if needed (Logic preserved from server.js)
         if (db.orders.length === 0 && db.trades.length === 0) {
@@ -200,9 +171,7 @@ async function loadAll() {
                 { id: 'ord_1', type: 'SELL', symbol: 'EUA', quantity: 5000, price: 85.50, owner: 'Market Maker', timestamp: Date.now() - 100000 },
                 { id: 'ord_2', type: 'BUY', symbol: 'EUA', quantity: 2000, price: 82.00, owner: 'Market Maker', timestamp: Date.now() - 50000 }
             ];
-            if (process.env.NODE_ENV !== 'production') {
-                saveJSON(paths.ORDERS_FILE, db.orders);
-            }
+            saveJSON(paths.ORDERS_FILE, db.orders);
         }
 
         _ensureAdminAndTraders();
@@ -211,9 +180,8 @@ async function loadAll() {
     } catch (error) {
         console.error("Error in loadAll:", error);
         console.error("Error stack:", error.stack);
-        // Ensure admin user exists even if loading fails
         _ensureAdminAndTraders();
-        throw error; // Re-throw to let caller handle
+        throw error;
     }
 }
 
@@ -238,49 +206,22 @@ function _ensureAdminAndTraders() {
                 permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN
             };
             db.users.unshift(adminUser);
-            if (process.env.NODE_ENV !== 'production') {
-                saveJSON(paths.USERS_FILE, db.users);
-            }
-            // Save to MongoDB if connected
-            if (process.env.MONGO_URI && mongo.mongoose && mongo.mongoose.connection.readyState === 1) {
-                saveToMongo('users', db.users).catch(err => console.error('Failed to save users to MongoDB:', err));
-            }
+            saveJSON(paths.USERS_FILE, db.users);
             console.log("Store: Restored admin user.");
         }
 
-        // Ensure Traders
-        const traders = [
-            { id: 'trader_a', email: 'atrader@cofleeter.com', name: 'A Trader' },
-            { id: 'trader_b', email: 'btrader@cofleeter.com', name: 'B Trader' },
-            { id: 'trader_c', email: 'ctrader@cofleeter.com', name: 'C Trader' }
-        ];
-        let tradersAdded = false;
-        traders.forEach(t => {
-            if (!db.users.find(u => u.email === t.email)) {
-                db.users.push({
-                    id: t.id,
-                    role: 'TRADER',
-                    email: t.email,
-                    password: '1234',
-                    name: t.name,
-                    company: 'Co-Fleeter Traders',
-                    permissions: DEFAULT_ROLE_PERMISSIONS.TRADER
-                });
-                tradersAdded = true;
-            }
-        });
-        if (tradersAdded) {
-            if (process.env.NODE_ENV !== 'production') {
-                saveJSON(paths.USERS_FILE, db.users);
-            }
-            // Save to MongoDB if connected
-            if (process.env.MONGO_URI && mongo.mongoose && mongo.mongoose.connection.readyState === 1) {
-                saveToMongo('users', db.users).catch(err => console.error('Failed to save users to MongoDB:', err));
-            }
+        // Ensure Traders - REMOVED (Legacy seed data causing zombies)
+        // Ensure Traders - REMOVED (Legacy seed data causing zombies)
+        // Active Cleanup: Remove legacy traders if they still exist
+        const legacyIds = ['trader_a', 'trader_b', 'trader_c'];
+        const initialLength = db.users.length;
+        db.users = db.users.filter(u => !legacyIds.includes(u.id));
+        if (db.users.length !== initialLength) {
+            saveJSON(paths.USERS_FILE, db.users);
+            console.log("Store: Removed legacy traders (A, B, C).");
         }
     } catch (error) {
-        console.error('Error in _ensureAdminAndTraders:', error);
-        // Don't throw, just log
+        console.error('Error in _ensureAdminAndTraders:', error.message);
     }
 }
 
@@ -297,8 +238,8 @@ const save = {
     },
     ciiData: () => { saveJSON(paths.CII_DATA_FILE, db.ciiConstants); saveToMongo('ciiConstants', db.ciiConstants); },
     euaManual: () => { saveJSON(paths.EUA_MANUAL_FILE, db.euaManualData); saveToMongo('euaManualData', db.euaManualData); },
-    euaSheet: () => { saveJSON(paths.EUA_SHEET_CACHE_FILE, db.euaSheetCache); }, // Cache usually not synced but let's leave it file only
-    accessLogs: () => { saveJSON(paths.ACCESS_LOGS_FILE, db.accessLogs); }, // logs file only
+    euaSheet: () => { saveJSON(paths.EUA_SHEET_CACHE_FILE, db.euaSheetCache); },
+    accessLogs: () => { saveJSON(paths.ACCESS_LOGS_FILE, db.accessLogs); },
     userData: () => { saveJSON(paths.USER_DATA_FILE, db.userData); saveToMongo('userData', db.userData); },
     traderContacts: () => { saveJSON(paths.TRADER_CONTACTS_FILE, db.traderContacts); saveToMongo('traderContacts', db.traderContacts); },
     trading: () => {
@@ -311,9 +252,14 @@ const save = {
     emailConfig: () => { saveJSON(paths.EMAIL_CONFIG_FILE, db.emailConfig); saveToMongo('emailConfig', db.emailConfig); }
 };
 
+// Helper function for DB status check (used by Admin badge)
+function getStatus() {
+    return mongo.mongoose ? mongo.mongoose.connection.readyState : 0;
+}
+
 module.exports = {
     db,
     loadAll,
     save,
-    getStatus: () => (mongo.mongoose ? mongo.mongoose.connection.readyState : 0)
+    getStatus
 };

@@ -60,42 +60,6 @@
     ]
   },
   {
-    "id": "trader_a",
-    "role": "TRADER",
-    "email": "atrader@cofleeter.com",
-    "password": "1234",
-    "name": "A Trader",
-    "company": "Co-Fleeter Traders",
-    "permissions": [
-      "VIEW_MARKET",
-      "TRADE"
-    ]
-  },
-  {
-    "id": "trader_b",
-    "role": "TRADER",
-    "email": "btrader@cofleeter.com",
-    "password": "1234",
-    "name": "B Trader",
-    "company": "Co-Fleeter Traders",
-    "permissions": [
-      "VIEW_MARKET",
-      "TRADE"
-    ]
-  },
-  {
-    "id": "trader_c",
-    "role": "TRADER",
-    "email": "ctrader@cofleeter.com",
-    "password": "1234",
-    "name": "C Trader",
-    "company": "Co-Fleeter Traders",
-    "permissions": [
-      "VIEW_MARKET",
-      "TRADE"
-    ]
-  },
-  {
     "id": "user_1766296671481",
     "role": "USER",
     "permissions": [

@@ -44,12 +44,14 @@
   "user_1766379265593": [
     {
       "id": "999999",
-      "cii_rating": "N/A",
-      "co2_ytd": 0,
+      "cii_rating": "A",
+      "co2_ytd": 311.4,
       "name": "PSD",
       "type": "LNG carrier ( >= 100,000 DWT)",
       "dwt": 93414,
       "year": 2025
     }
-  ]
+  ],
+  "user_1767402380955": [],
+  "user_1767403009888": []
 }

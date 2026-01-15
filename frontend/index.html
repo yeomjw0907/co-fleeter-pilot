@@ -4,93 +4,247 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Co-Fleeter</title>
+    <title>Co-Fleeter - Sustain your fleet with us</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <div class="login-container">
-        <!-- Animated Background Shapes -->
-        <div class="bg-shape shape-1"></div>
-        <div class="bg-shape shape-2"></div>
+    <!-- STICKY HEADER -->
+    <header class="landing-header">
+        <div class="flex items-center gap-2">
+            <div style="width: 40px; height: 40px; background: var(--color-primary); border-radius: 50%;"></div>
+            <span style="font-size: 1.5rem; font-weight: 800; color: white;">Co-Fleeter</span>
+        </div>
+        <button id="open-login-btn" class="btn btn-primary">Login / Register</button>
+    </header>
 
-        <div class="login-box card text-center">
-            <div class="mb-4">
-                <h1 class="brand-title">Co-Fleeter</h1>
-                <p class="text-muted">Maritime Decarbonization Platform v1.0</p>
+    <main class="landing-main">
+        <!-- HERO SECTION -->
+        <section class="landing-section section-hero">
+            <div class="hero-shape hero-shape-1"></div>
+            <div class="hero-shape hero-shape-2"></div>
+
+            <div class="hero-title">Sustain your fleet with us</div>
+            <div class="hero-subtitle">Co-Fleeter</div>
+        </section>
+
+        <!-- VISION & GOALS SECTION -->
+        <section class="landing-section">
+            <h2 class="section-title">Our Vision & Goals</h2>
+            <div class="content-block vision-grid">
+                <div class="vision-item">
+                    <h3>Our Vision</h3>
+                    <p>To empower the maritime industry to confidently navigate the decarbonization era.</p>
+                </div>
+                <div class="vision-item">
+                    <h3>Our Goals</h3>
+                    <p>
+                        The EU's introduction of EU ETS (2024 for maritime) and FuelEU Maritime (2025 onwards) creates
+                        new challenges for shipowners and cargo owners, necessitating carbon allowance purchases and
+                        promoting low-carbon fuel use. Recognizing the critical need for trading platforms in this
+                        evolving landscape, our goal is to provide an essential solution for compliance, cost
+                        optimization, and the transition to sustainable shipping.
+                    </p>
+                </div>
             </div>
+        </section>
 
-            <div id="error-message" class="alert alert-error hidden">
-                Invalid credentials. Please try again.
+        <!-- STANDARDS SECTION -->
+        <section class="landing-section" style="background: rgba(255,255,255,0.02);">
+            <h2 class="section-title">Standards & References</h2>
+            <div class="content-block">
+                <h4 style="font-size: 1.5rem; margin-bottom: 2rem; color: #cbd5e1;">About our calculation basis</h4>
+
+                <!-- CII -->
+                <div class="standard-category">
+                    <h3>CII: Carbon Intensity Index</h3>
+                    <ul class="standard-list">
+                        <li><a href="https://drive.google.com/file/d/1ALusM4DraRuyk6nyzqAIQ1oLO5oxETw4/view?usp=sharing"
+                                target="_blank" class="standard-code">Resolution MEPC.352(78)</a> 2022 Guidelines on
+                            operational carbon intensity indicators and the calculation methods (CII Guidelines, G1)
+                        </li>
+                        <li><a href="https://drive.google.com/file/d/1ozdumHksSUhSV8bxR4dAnHAkJF7d8xox/view?usp=sharing"
+                                target="_blank" class="standard-code">Resolution MEPC.353(78)</a> 2022 Guidelines on the
+                            reference lines for use with Operational Carbon Intensity Indicators (CII Reference Lines
+                            Guidelines, G2)</li>
+                        <li><a href="https://drive.google.com/file/d/17g5VLikzh3a2L98waikbTOPC65CQ-lex/view?usp=sharing"
+                                target="_blank" class="standard-code">Resolution MEPC.338(76)</a> 2021 Guidelines on the
+                            operational carbon intensity reduction factors relative to reference lines (CII Reduction
+                            Factor Guidelines, G3)</li>
+                        <li><a href="https://drive.google.com/file/d/1yCdGgefgiHtwlmP8hHsGFqeGqjlJbnkM/view?usp=sharing"
+                                target="_blank" class="standard-code">Resolution MEPC.354(78)</a> 2022 Guidelines on the
+                            operational carbon intensity rating of ships (CII Rating Guidelines, G4)</li>
+                        <li><a href="https://drive.google.com/file/d/1fWP0JpdofXtdeStY2Vr270Y55bKj8UUN/view?usp=sharing"
+                                target="_blank" class="standard-code">Resolution MEPC.355(78)</a> 2022 Interim
+                            Guidelines on correction factors and voyage adjustments for CII calculations (CII
+                            Guidelines, G5)</li>
+                    </ul>
+                </div>
+
+                <!-- EU-ETS -->
+                <div class="standard-category">
+                    <h3>EU-ETS (European Union Emissions Trading System)</h3>
+                    <ul class="standard-list">
+                        <li><a href="https://drive.google.com/file/d/1KS8xEOHzxzHl-laMnh-wGNKTSlwAsWDW/view?usp=sharing"
+                                target="_blank" class="standard-code">Directive 2003/87/EC</a> (consolidated text) -
+                            Amended by Regulation (EU) 2023/959</li>
+                        <li><a href="https://drive.google.com/file/d/1ZfWYyTCpSnE9gh__tESh2jYh4BEBe9Ub/view?usp=sharing"
+                                target="_blank" class="standard-code">Delegated Regulation (EU) 2019/1122</a> (Union
+                            Registry) - Amended by Regulation (EU) 2023/2904</li>
+                        <li><a href="https://drive.google.com/file/d/12Y8I8yoL4BbrUljjIaDmKhEpDn_Z7nEB/view?usp=sharing"
+                                target="_blank" class="standard-code">Implementing Regulation (EU) 2023/2297</a> - The
+                            list of neighbouring container transshipment ports</li>
+                        <li><a href="https://drive.google.com/file/d/1QZ0QOx90rJxYQ11hRVfGbAwF84fxamR5/view?usp=sharing"
+                                target="_blank" class="standard-code">Implementing Regulation (EU) 2023/2599</a> - The
+                            administration of shipping companies by administering authorities</li>
+                        <li><a href="https://drive.google.com/file/d/1I5sCiLuPGD-aoqRoRpTTvoQa8RLa3onP/view?usp=sharing"
+                                target="_blank" class="standard-code">Implementing Regulation (EU) 2023/2895</a> - The
+                            list of islands and ports, etc. Excluded from the scope of EU ETS</li>
+                    </ul>
+                </div>
+
+                <!-- FuelEU -->
+                <div class="standard-category">
+                    <h3>FuelEU Maritime</h3>
+                    <ul class="standard-list">
+                        <li><a href="https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:32023R1805"
+                                target="_blank" class="standard-code">REGULATION (EU) 2023/1805</a> OF THE EUROPEAN
+                            PARLIAMENT AND OF THE COUNCIL of 13 September 2023</li>
+                    </ul>
+                </div>
             </div>
+        </section>
 
-            <!-- Login Form -->
-            <form id="login-form">
-                <div class="input-group">
-                    <label class="input-label" for="email">Email Address</label>
-                    <input type="email" id="email" class="input-field" placeholder="name@company.com" required>
+        <!-- CONTACT SECTION -->
+        <section class="landing-section">
+            <h2 class="section-title">Contact us</h2>
+            <div class="contact-container">
+                <form class="grid grid-cols-2 gap-4">
+                    <div class="input-group">
+                        <label class="input-label">First Name *</label>
+                        <input type="text" class="input-field">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Last Name *</label>
+                        <input type="text" class="input-field">
+                    </div>
+
+                    <div class="input-group">
+                        <label class="input-label">Email *</label>
+                        <input type="email" class="input-field">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Number with country code *</label>
+                        <input type="text" class="input-field">
+                    </div>
+
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label class="input-label">Company name *</label>
+                        <input type="text" class="input-field">
+                    </div>
+
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label class="input-label">Write your message or describe your issue here. *</label>
+                        <textarea class="input-field" rows="4"></textarea>
+                    </div>
+
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label class="flex items-center gap-2 cursor-pointer text-sm text-muted">
+                            <input type="checkbox" required>
+                            <span>I accept Co-Fleeter's <a href="#" style="text-decoration: underline;">privacy
+                                    policy</a> and being signed up to receiving marketing communications. I understand I
+                                can unsubscribe from these at anytime. *</span>
+                        </label>
+                    </div>
+
+                    <div style="grid-column: span 2;">
+                        <button class="btn btn-primary w-full">Submit</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <!-- LOGIN MODAL -->
+    <div id="login-modal" class="modal-overlay">
+        <div class="modal-content relative">
+            <span id="close-modal" class="modal-close">&times;</span>
+            <div class="login-box card text-center p-8">
+                <div class="mb-4">
+                    <h1 class="brand-title">Co-Fleeter</h1>
+                    <p class="text-muted">Sign in to your account</p>
                 </div>
 
-                <div class="input-group">
-                    <label class="input-label" for="password">Password</label>
-                    <input type="password" id="password" class="input-field" placeholder="••••••••" required>
+                <div id="error-message" class="alert alert-error hidden">
+                    Invalid credentials. Please try again.
                 </div>
 
-                <button type="submit" class="btn btn-primary w-full mt-4">
-                    Sign In to Portal
-                </button>
+                <!-- Login Form -->
+                <form id="login-form">
+                    <div class="input-group">
+                        <label class="input-label" for="email">Email Address</label>
+                        <input type="email" id="email" class="input-field" placeholder="name@company.com" required>
+                    </div>
 
-                <div class="mt-4 text-center">
-                    <a href="#" id="show-register" class="text-sm text-primary hover:text-white">New here? Create an
-                        account</a>
-                </div>
+                    <div class="input-group">
+                        <label class="input-label" for="password">Password</label>
+                        <input type="password" id="password" class="input-field" placeholder="••••••••" required>
+                    </div>
 
+                    <button type="submit" class="btn btn-primary w-full mt-4">
+                        Sign In to Portal
+                    </button>
 
-            </form>
+                    <div class="mt-4 text-center">
+                        <a href="#" id="show-register" class="text-sm text-primary hover:text-white">New here? Create an
+                            account</a>
+                    </div>
+                </form>
 
-            <!-- Registration Form (Hidden) -->
-            <form id="register-form" class="hidden">
-                <div class="input-group">
-                    <label class="input-label" for="reg-name">Full Name</label>
-                    <input type="text" id="reg-name" class="input-field" placeholder="John Doe" required>
-                </div>
+                <!-- Registration Form (Hidden) -->
+                <form id="register-form" class="hidden">
+                    <div class="input-group">
+                        <label class="input-label" for="reg-name">Full Name</label>
+                        <input type="text" id="reg-name" class="input-field" placeholder="John Doe" required>
+                    </div>
 
-                <div class="input-group">
-                    <label class="input-label" for="reg-company">Company Name</label>
-                    <input type="text" id="reg-company" class="input-field" placeholder="Shipping Co." required>
-                </div>
+                    <div class="input-group">
+                        <label class="input-label" for="reg-company">Company Name</label>
+                        <input type="text" id="reg-company" class="input-field" placeholder="Shipping Co." required>
+                    </div>
 
-                <div class="input-group">
-                    <label class="input-label" for="reg-email">Email Address</label>
-                    <input type="email" id="reg-email" class="input-field" placeholder="name@company.com" required>
-                </div>
+                    <div class="input-group">
+                        <label class="input-label" for="reg-email">Email Address</label>
+                        <input type="email" id="reg-email" class="input-field" placeholder="name@company.com" required>
+                    </div>
 
-                <div class="input-group">
-                    <label class="input-label" for="reg-phone">Phone Number</label>
-                    <input type="text" id="reg-phone" class="input-field" placeholder="+1 234 567 890">
-                </div>
+                    <div class="input-group">
+                        <label class="input-label" for="reg-phone">Phone Number</label>
+                        <input type="text" id="reg-phone" class="input-field" placeholder="+1 234 567 890">
+                    </div>
 
-                <div class="input-group">
-                    <label class="input-label" for="reg-password">Password</label>
-                    <input type="password" id="reg-password" class="input-field" placeholder="••••••••" required>
-                </div>
+                    <div class="input-group">
+                        <label class="input-label" for="reg-password">Password</label>
+                        <input type="password" id="reg-password" class="input-field" placeholder="••••••••" required>
+                    </div>
 
-                <div class="input-group">
-                    <label class="input-label" for="reg-password-confirm">Confirm Password</label>
-                    <input type="password" id="reg-password-confirm" class="input-field" placeholder="••••••••"
-                        required>
-                </div>
+                    <div class="input-group">
+                        <label class="input-label" for="reg-password-confirm">Confirm Password</label>
+                        <input type="password" id="reg-password-confirm" class="input-field" placeholder="••••••••"
+                            required>
+                    </div>
 
-                <button type="submit" class="btn btn-success w-full mt-4">
-                    Create Account
-                </button>
+                    <button type="submit" class="btn btn-success w-full mt-4">
+                        Create Account
+                    </button>
 
-                <div class="mt-4 text-center">
-                    <a href="#" id="show-login" class="text-sm text-primary hover:text-white">Already have an account?
-                        Sign In</a>
-                </div>
-            </form>
+                    <div class="mt-4 text-center">
+                        <a href="#" id="show-login" class="text-sm text-primary hover:text-white">Already have an
+                            account? Sign In</a>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -99,12 +253,40 @@
     <script src="js/validation.js"></script>
     <script src="js/auth.js"></script>
     <script>
-        // Check if already logged in
+        // Check if already logged in - redirect immediately if so
         auth.redirectIfLoggedIn();
 
+        // Modal Logic
+        const loginModal = document.getElementById('login-modal');
+        const openLoginBtn = document.getElementById('open-login-btn');
+        const closeModalBtn = document.getElementById('close-modal');
+
+        openLoginBtn.addEventListener('click', () => {
+            loginModal.classList.add('active');
+        });
+
+        closeModalBtn.addEventListener('click', () => {
+            loginModal.classList.remove('active');
+        });
+
+        // Close on background click
+        loginModal.addEventListener('click', (e) => {
+            if (e.target === loginModal) {
+                loginModal.classList.remove('active');
+            }
+        });
+
+
+        // Existing Form Logic
         const loginForm = document.getElementById('login-form');
         const registerForm = document.getElementById('register-form');
         const errorMsg = document.getElementById('error-message');
+
+        const emailField = document.getElementById('email');
+        const passwordField = document.getElementById('password');
+        const regEmailField = document.getElementById('reg-email');
+        const regPasswordField = document.getElementById('reg-password');
+        const regPasswordConfirmField = document.getElementById('reg-password-confirm');
 
         // Toggle Forms
         document.getElementById('show-register').addEventListener('click', (e) => {
@@ -121,72 +303,25 @@
             errorMsg.classList.add('hidden');
         });
 
-        // Setup form validation
-        const emailField = document.getElementById('email');
-        const passwordField = document.getElementById('password');
-        const regEmailField = document.getElementById('reg-email');
-        const regPasswordField = document.getElementById('reg-password');
-        const regPasswordConfirmField = document.getElementById('reg-password-confirm');
+        // Initialize Validation
+        validator.attachValidation(emailField, [{ rule: 'required' }, { rule: 'email' }]);
+        validator.attachValidation(passwordField, [{ rule: 'required' }, { rule: 'minLength', params: [4] }]);
 
-        // Login form validation
-        validator.attachValidation(emailField, [
-            { rule: 'required' },
-            { rule: 'email' }
-        ]);
-        validator.attachValidation(passwordField, [
-            { rule: 'required' },
-            { rule: 'minLength', params: [4] }
-        ]);
-
-        // Register form validation
-        validator.attachValidation(document.getElementById('reg-name'), [
-            { rule: 'required' },
-            { rule: 'minLength', params: [2] }
-        ]);
-        validator.attachValidation(document.getElementById('reg-company'), [
-            { rule: 'required' }
-        ]);
-        validator.attachValidation(regEmailField, [
-            { rule: 'required' },
-            { rule: 'email' }
-        ]);
-        // Phone is optional but good to have minimal validation if present? keeping it optional for now.
-
-        validator.attachValidation(regPasswordField, [
-            { rule: 'required' },
-            { rule: 'minLength', params: [4] }
-        ]);
-        validator.attachValidation(regPasswordConfirmField, [
-            { rule: 'required' }
-        ]);
+        validator.attachValidation(document.getElementById('reg-name'), [{ rule: 'required' }, { rule: 'minLength', params: [2] }]);
+        validator.attachValidation(document.getElementById('reg-company'), [{ rule: 'required' }]);
+        validator.attachValidation(regEmailField, [{ rule: 'required' }, { rule: 'email' }]);
+        validator.attachValidation(regPasswordField, [{ rule: 'required' }, { rule: 'minLength', params: [4] }]);
+        validator.attachValidation(regPasswordConfirmField, [{ rule: 'required' }]);
 
         // Login Handler
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-
             const submitBtn = e.target.querySelector('button[type="submit"]');
             const email = emailField.value;
             const password = passwordField.value;
 
-            // Validate before submit
-            const emailValid = validator.validateField(emailField, [
-                { rule: 'required' },
-                { rule: 'email' }
-            ]);
-            const passwordValid = validator.validateField(passwordField, [
-                { rule: 'required' },
-                { rule: 'minLength', params: [4] }
-            ]);
-
-            if (!emailValid.valid || !passwordValid.valid) {
-                toast.error('Please fix the errors before submitting');
-                return;
-            }
-
-            // Use loading wrapper for button
             await loading.wrapButton(submitBtn, async () => {
                 const result = await auth.login(email, password);
-
                 if (result.success) {
                     toast.success('Login successful! Redirecting...');
                     setTimeout(() => {
@@ -201,8 +336,8 @@
         // Register Handler
         registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-
             const submitBtn = e.target.querySelector('button[type="submit"]');
+            // ... (keep existing register fields extraction) ...
             const name = document.getElementById('reg-name').value;
             const company = document.getElementById('reg-company').value;
             const email = regEmailField.value;
@@ -210,40 +345,17 @@
             const password = regPasswordField.value;
             const confirm = regPasswordConfirmField.value;
 
-            // Check password match
             if (password !== confirm) {
                 toast.error('Passwords do not match');
-                validator.showFeedback(regPasswordConfirmField, false, 'Passwords do not match');
-                return;
-            }
-
-            // Validate form
-            const isValid = validator.validateForm(registerForm, {
-                'reg-name': [{ rule: 'required' }, { rule: 'minLength', params: [2] }],
-                'reg-company': [{ rule: 'required' }],
-                'reg-email': [{ rule: 'required' }, { rule: 'email' }],
-                'reg-password': [{ rule: 'required' }, { rule: 'minLength', params: [4] }],
-                'reg-password-confirm': [{ rule: 'required' }]
-            });
-
-            if (!isValid) {
-                toast.error('Please fix the errors before submitting');
                 return;
             }
 
             await loading.wrapButton(submitBtn, async () => {
-                const result = await auth.register({
-                    name, company, email, phone, password
-                });
-
+                const result = await auth.register({ name, company, email, phone, password });
                 if (result.success) {
                     toast.success('Account created successfully! Please sign in.');
-
-                    // Switch to login view
                     registerForm.classList.add('hidden');
                     loginForm.classList.remove('hidden');
-
-                    // Pre-fill email
                     emailField.value = email;
                 } else {
                     toast.error(result.message || 'Registration failed');

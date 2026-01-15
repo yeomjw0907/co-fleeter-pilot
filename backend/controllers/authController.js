@@ -3,73 +3,27 @@ const { DEFAULT_ROLE_PERMISSIONS } = require('../config/constants');
 const logService = require('../services/logService');
 
 exports.login = (req, res) => {
-    try {
-        // Ensure db.users exists (create if not)
-        if (!db) {
-            console.error('[LOGIN ERROR] Database object not available');
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Server error. Please try again.'
-            });
-        }
-        
-        if (!Array.isArray(db.users)) {
-            console.warn('[LOGIN WARNING] db.users is not an array, initializing...');
-            db.users = [];
-            // Ensure admin user exists
-            const { DEFAULT_ROLE_PERMISSIONS } = require('../config/constants');
-            db.users.push({
-                id: 'admin_cf',
-                role: 'ADMIN',
-                email: 'cfadmin@cofleeter.com',
-                password: '1234',
-                name: 'Super Admin',
-                company: 'Co-Fleeter',
-                permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN
-            });
-        }
-        
-        const { email, password } = req.body;
-        
-        if (!email || !password) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Email and password are required' 
-            });
-        }
-        
-        console.log(`[LOGIN ATTEMPT] Email: ${email}`);
+    const { email, password } = req.body;
+    console.log(`[LOGIN ATTEMPT] Email: ${email}`);
 
-        const user = db.users.find(u => u.email === email && u.password === password);
+    const user = db.users.find(u => u.email === email && u.password === password);
 
-        if (user) {
-            console.log(`[LOGIN SUCCESS] User: ${user.name} (${user.role})`);
-            const { password: pwd, ...safeUser } = user;
-
-            // Log Access
-            try {
-                logService.logAccess(user, req.ip || 'unknown');
-            } catch (logError) {
-                console.error('Log access error:', logError);
-                // Don't fail login if logging fails
-            }
-
-            return res.json({ success: true, user: safeUser });
-        } else {
-            console.log(`[LOGIN FAILED] Invalid credentials for ${email}`);
-            return res.status(401).json({ 
-                success: false, 
-                message: '아이디(Email) 또는 비밀번호가 일치하지 않습니다.' 
-            });
+    if (user) {
+        if (user.suspended) {
+            console.log(`[LOGIN BLOCKED] Suspended Account: ${email}`);
+            return res.status(403).json({ success: false, message: 'This account has been suspended. Please contact administrator.' });
         }
-    } catch (error) {
-        console.error('[LOGIN ERROR]', error);
-        console.error('Error stack:', error.stack);
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Server error during login',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
+
+        console.log(`[LOGIN SUCCESS] User: ${user.name} (${user.role})`);
+        const { password, ...safeUser } = user;
+
+        // Log Access
+        logService.logAccess(user, req.ip);
+
+        res.json({ success: true, user: safeUser });
+    } else {
+        console.log(`[LOGIN FAILED] Invalid credentials for ${email}`);
+        res.status(401).json({ success: false, message: '아이디(Email) 또는 비밀번호가 일치하지 않습니다.' });
     }
 };
 
