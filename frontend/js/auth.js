@@ -16,6 +16,23 @@ class AuthService {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
             });
+
+            // Check if response is OK before parsing
+            if (!response.ok) {
+                // Try to parse as JSON, but handle plain text errors
+                let errorMessage = 'Login failed';
+                try {
+                    const data = await response.json();
+                    errorMessage = data.message || errorMessage;
+                } catch (jsonError) {
+                    // Response is not JSON, try to get text
+                    const text = await response.text();
+                    errorMessage = text || `Server error (${response.status})`;
+                    console.error('Non-JSON error response:', text);
+                }
+                return { success: false, message: errorMessage };
+            }
+
             const data = await response.json();
 
             if (data.success) {
@@ -26,7 +43,7 @@ class AuthService {
             }
         } catch (error) {
             console.error('Login error:', error);
-            return { success: false, message: 'Network error' };
+            return { success: false, message: '서버 연결 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' };
         }
     }
 

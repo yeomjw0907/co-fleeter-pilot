@@ -52,13 +52,18 @@ async function initialize() {
         try {
             console.log('🔄 Initializing Co-Fleeter Backend...');
 
-            // 1. Load Data (File + Optional Mongo)
+            // 1. Load Data (File + Optional Mongo) - Never throw
             try {
                 await store.loadAll();
                 console.log('✅ Data loaded');
             } catch (loadError) {
                 console.error('⚠️ Data load error (continuing with defaults):', loadError.message);
-                _ensureAdminAndTraders();
+                // Ensure fallback initialization
+                try {
+                    _ensureAdminAndTraders();
+                } catch (fallbackError) {
+                    console.error('⚠️ Fallback init failed:', fallbackError.message);
+                }
             }
 
             // 2. Init Services (non-critical)
@@ -74,19 +79,23 @@ async function initialize() {
                 .then(() => console.log("✅ Initial EUA Sync Complete"))
                 .catch(err => console.error("⚠️ Initial EUA Sync Failed", err));
 
+            // Mark as initialized even if some parts failed - server should be operational
             isInitialized = true;
-            console.log('✅ Co-Fleeter Backend initialized successfully');
+            console.log('✅ Co-Fleeter Backend initialized (with possible fallbacks)');
             return true;
         } catch (error) {
-            console.error('❌ Initialization error:', error);
+            console.error('❌ Critical initialization error:', error);
+            // Still mark as initialized to prevent infinite retries
+            isInitialized = true;
             initPromise = null;
-            isInitialized = false;
             try {
                 _ensureAdminAndTraders();
+                console.log('✅ Using emergency fallback initialization');
             } catch (e) {
-                console.error('Failed to ensure admin user:', e);
+                console.error('❌ Emergency fallback failed:', e);
             }
-            return false;
+            // Return true anyway - server should attempt to serve requests
+            return true;
         }
     })();
 
@@ -186,13 +195,20 @@ app.get('*', (req, res) => {
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
     console.error('Global error handler:', err);
+    console.error('Error stack:', err.stack);
+
     if (res.headersSent) {
         return next(err);
     }
-    res.status(500).json({
+
+    // ALWAYS return JSON for API routes
+    res.status(err.status || 500).json({
         success: false,
-        message: 'A server error has occurred',
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        message: err.message || 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? {
+            message: err.message,
+            stack: err.stack
+        } : undefined
     });
 });
 

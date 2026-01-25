@@ -110,8 +110,10 @@ async function loadAll() {
             console.log("Connecting to MongoDB...");
             try {
                 const connectionPromise = mongo.connectDB(process.env.MONGO_URI);
+                // Reduce timeout in production for faster failure
+                const timeout = process.env.NODE_ENV === 'production' ? 5000 : 10000;
                 const timeoutPromise = new Promise((resolve) =>
-                    setTimeout(() => resolve(false), 10000)
+                    setTimeout(() => resolve(false), timeout)
                 );
 
                 const connected = await Promise.race([connectionPromise, timeoutPromise]);
@@ -121,7 +123,7 @@ async function loadAll() {
                     try {
                         const syncPromise = mongo.GlobalData.find({});
                         const syncTimeout = new Promise((_, reject) =>
-                            setTimeout(() => reject(new Error('Sync timeout')), 4000)
+                            setTimeout(() => reject(new Error('Sync timeout')), 3000)
                         );
 
                         const globals = await Promise.race([syncPromise, syncTimeout]);
@@ -144,12 +146,14 @@ async function loadAll() {
                         console.log("MongoDB Sync Complete.");
                     } catch (e) {
                         console.error("MongoDB Sync Failed", e.message);
+                        console.warn("Using in-memory defaults due to sync failure");
                     }
                 } else {
-                    console.warn("MongoDB connection failed or timed out, using defaults");
+                    console.warn("MongoDB connection failed or timed out, using in-memory defaults");
                 }
             } catch (mongoError) {
                 console.error("MongoDB connection error:", mongoError.message);
+                console.warn("Continuing with in-memory storage");
             }
         } else {
             console.warn("MONGO_URI not set, using in-memory defaults");
@@ -174,14 +178,21 @@ async function loadAll() {
             saveJSON(paths.ORDERS_FILE, db.orders);
         }
 
+        // Always ensure admin and basic data structures exist
         _ensureAdminAndTraders();
 
-        console.log("Store: All data loaded.");
+        console.log("Store: All data loaded successfully.");
     } catch (error) {
-        console.error("Error in loadAll:", error);
+        console.error("CRITICAL Error in loadAll:", error);
         console.error("Error stack:", error.stack);
-        _ensureAdminAndTraders();
-        throw error;
+        // Even on error, ensure basic data structures exist
+        try {
+            _ensureAdminAndTraders();
+            console.log("Recovered with fallback initialization");
+        } catch (fallbackError) {
+            console.error("Fallback initialization also failed:", fallbackError.message);
+        }
+        // Don't throw - allow server to continue with defaults
     }
 }
 
