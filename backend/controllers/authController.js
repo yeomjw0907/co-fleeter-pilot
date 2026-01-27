@@ -13,10 +13,15 @@ exports.login = (req, res) => {
             });
         }
 
+        // Ensure users array exists and has admin
         if (!Array.isArray(db.users)) {
             console.warn('[LOGIN WARNING] db.users is not an array, initializing...');
             db.users = [];
-            // Ensure admin user exists
+        }
+        
+        // Always ensure admin exists (fallback)
+        const hasAdmin = db.users.some(u => u && u.email === 'cfadmin@cofleeter.com');
+        if (!hasAdmin) {
             db.users.push({
                 id: 'admin_cf',
                 role: 'ADMIN',
@@ -24,8 +29,9 @@ exports.login = (req, res) => {
                 password: '1234',
                 name: 'Super Admin',
                 company: 'Co-Fleeter',
-                permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN
+                permissions: DEFAULT_ROLE_PERMISSIONS.ADMIN || {}
             });
+            console.log('[LOGIN] Admin user ensured');
         }
 
         const { email, password } = req.body;

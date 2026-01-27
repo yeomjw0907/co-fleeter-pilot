@@ -3,9 +3,11 @@ const paths = require('../config/paths');
 const { INITIAL_CII_CONSTANTS } = require('../config/constants');
 const { DEFAULT_ROLE_PERMISSIONS } = require('../config/constants');
 
-// --- In-Memory Stores ---
-// --- MongoDB Adapter ---
+// --- Database Adapters ---
+// MongoDB (legacy, for migration)
 const mongo = require('../models/mongo');
+// Supabase (new)
+const supabase = require('../models/supabase');
 
 // --- In-Memory Stores ---
 const db = {
@@ -74,6 +76,15 @@ async function saveToMongo(key, data) {
     }
 }
 
+// --- persistence internal helpers for Supabase ---
+async function saveToSupabase(key, data) {
+    try {
+        await supabase.saveGlobalData(key, data);
+    } catch (e) {
+        console.error(`Supabase Save Error [${key}]`, e);
+    }
+}
+
 // --- Load Logic ---
 async function loadAll() {
     try {
@@ -105,58 +116,53 @@ async function loadAll() {
             console.log('Production mode: Skipping file system reads');
         }
 
-        // 2. Try MongoDB Connection (with timeout)
-        if (process.env.MONGO_URI) {
-            console.log("Connecting to MongoDB...");
+        // 2. Try Supabase Connection (primary database)
+        if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            console.log("Connecting to Supabase...");
             try {
-                const connectionPromise = mongo.connectDB(process.env.MONGO_URI);
-                // Reduce timeout in production for faster failure
-                const timeout = process.env.NODE_ENV === 'production' ? 5000 : 10000;
-                const timeoutPromise = new Promise((resolve) =>
-                    setTimeout(() => resolve(false), timeout)
-                );
-
-                const connected = await Promise.race([connectionPromise, timeoutPromise]);
-
-                if (connected) {
-                    console.log("Syncing data from MongoDB...");
+                const client = supabase.connectSupabase();
+                
+                if (client) {
+                    console.log("Loading data from Supabase...");
                     try {
-                        const syncPromise = mongo.GlobalData.find({});
-                        const syncTimeout = new Promise((_, reject) =>
-                            setTimeout(() => reject(new Error('Sync timeout')), 3000)
-                        );
-
-                        const globals = await Promise.race([syncPromise, syncTimeout]);
-
-                        globals.forEach(doc => {
-                            const k = doc.key;
-                            if (k === 'users') db.users = doc.data;
-                            else if (k === 'fleets') db.fleets = doc.data;
-                            else if (k === 'fuelData') db.fuelData = doc.data;
-                            else if (k === 'euData') db.euData = doc.data;
-                            else if (k === 'ciiConstants') db.ciiConstants = doc.data;
-                            else if (k === 'euaManualData') db.euaManualData = doc.data;
-                            else if (k === 'userData') db.userData = doc.data;
-                            else if (k === 'traderContacts') db.traderContacts = doc.data;
-                            else if (k === 'orders') db.orders = doc.data;
-                            else if (k === 'trades') db.trades = doc.data;
-                            else if (k === 'pools') db.pools = doc.data;
-                            else if (k === 'emailConfig') db.emailConfig = doc.data;
-                        });
-                        console.log("MongoDB Sync Complete.");
-                    } catch (e) {
-                        console.error("MongoDB Sync Failed", e.message);
-                        console.warn("Using in-memory defaults due to sync failure");
+                        // Test connection first
+                        const connected = await supabase.testConnection();
+                        
+                        if (connected) {
+                            // Load all global data
+                            const globalData = await supabase.loadAllGlobalData();
+                            
+                            // Apply loaded data to db
+                            if (globalData.users) db.users = globalData.users;
+                            if (globalData.fleets) db.fleets = globalData.fleets;
+                            if (globalData.fuelData) db.fuelData = globalData.fuelData;
+                            if (globalData.euData) db.euData = globalData.euData;
+                            if (globalData.ciiConstants) db.ciiConstants = globalData.ciiConstants;
+                            if (globalData.euaManualData) db.euaManualData = globalData.euaManualData;
+                            if (globalData.userData) db.userData = globalData.userData;
+                            if (globalData.traderContacts) db.traderContacts = globalData.traderContacts;
+                            if (globalData.orders) db.orders = globalData.orders;
+                            if (globalData.trades) db.trades = globalData.trades;
+                            if (globalData.pools) db.pools = globalData.pools;
+                            if (globalData.emailConfig) db.emailConfig = globalData.emailConfig;
+                            
+                            console.log("✅ Supabase data loaded successfully");
+                        } else {
+                            console.warn("Supabase connection test failed, using in-memory defaults");
+                        }
+                    } catch (loadError) {
+                        console.error("Supabase load error:", loadError.message);
+                        console.warn("Using in-memory defaults due to load failure");
                     }
                 } else {
-                    console.warn("MongoDB connection failed or timed out, using in-memory defaults");
+                    console.warn("Supabase client initialization failed, using in-memory defaults");
                 }
-            } catch (mongoError) {
-                console.error("MongoDB connection error:", mongoError.message);
+            } catch (supabaseError) {
+                console.error("Supabase connection error:", supabaseError.message);
                 console.warn("Continuing with in-memory storage");
             }
         } else {
-            console.warn("MONGO_URI not set, using in-memory defaults");
+            console.warn("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set, using in-memory defaults");
         }
 
 
@@ -239,33 +245,34 @@ function _ensureAdminAndTraders() {
 
 // --- Save Methods ---
 const save = {
-    users: () => { saveJSON(paths.USERS_FILE, db.users); saveToMongo('users', db.users); },
-    fleets: () => { saveJSON(paths.FLEETS_FILE, db.fleets); saveToMongo('fleets', db.fleets); },
-    fuelData: () => { saveJSON(paths.FUEL_DATA_FILE, db.fuelData); saveToMongo('fuelData', db.fuelData); },
+    users: () => { saveJSON(paths.USERS_FILE, db.users); saveToSupabase('users', db.users); },
+    fleets: () => { saveJSON(paths.FLEETS_FILE, db.fleets); saveToSupabase('fleets', db.fleets); },
+    fuelData: () => { saveJSON(paths.FUEL_DATA_FILE, db.fuelData); saveToSupabase('fuelData', db.fuelData); },
     euData: () => {
         if (fs.existsSync(paths.EU_DATA_FILE)) fs.copyFileSync(paths.EU_DATA_FILE, paths.EU_DATA_FILE + '.backup');
         saveJSON(paths.EU_DATA_FILE, db.euData);
-        saveToMongo('euData', db.euData);
+        saveToSupabase('euData', db.euData);
     },
-    ciiData: () => { saveJSON(paths.CII_DATA_FILE, db.ciiConstants); saveToMongo('ciiConstants', db.ciiConstants); },
-    euaManual: () => { saveJSON(paths.EUA_MANUAL_FILE, db.euaManualData); saveToMongo('euaManualData', db.euaManualData); },
+    ciiData: () => { saveJSON(paths.CII_DATA_FILE, db.ciiConstants); saveToSupabase('ciiConstants', db.ciiConstants); },
+    euaManual: () => { saveJSON(paths.EUA_MANUAL_FILE, db.euaManualData); saveToSupabase('euaManualData', db.euaManualData); },
     euaSheet: () => { saveJSON(paths.EUA_SHEET_CACHE_FILE, db.euaSheetCache); },
     accessLogs: () => { saveJSON(paths.ACCESS_LOGS_FILE, db.accessLogs); },
-    userData: () => { saveJSON(paths.USER_DATA_FILE, db.userData); saveToMongo('userData', db.userData); },
-    traderContacts: () => { saveJSON(paths.TRADER_CONTACTS_FILE, db.traderContacts); saveToMongo('traderContacts', db.traderContacts); },
+    userData: () => { saveJSON(paths.USER_DATA_FILE, db.userData); saveToSupabase('userData', db.userData); },
+    traderContacts: () => { saveJSON(paths.TRADER_CONTACTS_FILE, db.traderContacts); saveToSupabase('traderContacts', db.traderContacts); },
     trading: () => {
         saveJSON(paths.ORDERS_FILE, db.orders);
         saveJSON(paths.TRADES_FILE, db.trades);
-        saveToMongo('orders', db.orders);
-        saveToMongo('trades', db.trades);
+        saveToSupabase('orders', db.orders);
+        saveToSupabase('trades', db.trades);
     },
-    pools: () => { saveJSON(paths.POOLS_FILE, db.pools); saveToMongo('pools', db.pools); },
-    emailConfig: () => { saveJSON(paths.EMAIL_CONFIG_FILE, db.emailConfig); saveToMongo('emailConfig', db.emailConfig); }
+    pools: () => { saveJSON(paths.POOLS_FILE, db.pools); saveToSupabase('pools', db.pools); },
+    emailConfig: () => { saveJSON(paths.EMAIL_CONFIG_FILE, db.emailConfig); saveToSupabase('emailConfig', db.emailConfig); }
 };
 
 // Helper function for DB status check (used by Admin badge)
 function getStatus() {
-    return mongo.mongoose ? mongo.mongoose.connection.readyState : 0;
+    // Return 1 if Supabase is connected, 0 otherwise
+    return supabase.isConnected() ? 1 : 0;
 }
 
 module.exports = {

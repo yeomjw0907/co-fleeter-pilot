@@ -155,12 +155,22 @@ app.use(async (req, res, next) => {
 
         if (req.path.startsWith('/api') && initPromise && !isInitialized) {
             try {
+                // Faster timeout for serverless (2 seconds)
+                const timeout = process.env.NODE_ENV === 'production' ? 2000 : 3000;
                 await Promise.race([
                     initPromise,
-                    new Promise((resolve) => setTimeout(() => resolve(false), 3000))
+                    new Promise((resolve) => setTimeout(() => {
+                        console.warn('Initialization timeout, continuing with defaults');
+                        isInitialized = true; // Mark as initialized to prevent retries
+                        _ensureAdminAndTraders(); // Ensure at least admin exists
+                        resolve(false);
+                    }, timeout))
                 ]);
             } catch (error) {
                 console.error('Initialization error in middleware:', error.message);
+                // Ensure basic setup even on error
+                isInitialized = true;
+                _ensureAdminAndTraders();
             }
         }
 
@@ -223,6 +233,15 @@ if (process.env.NODE_ENV !== 'production') {
     })();
 } else {
     console.log('✅ Co-Fleeter Backend loaded for Vercel Serverless');
+    
+    // Check for required environment variables in production
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        console.warn('⚠️ SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set');
+        console.warn('⚠️ Application will run with in-memory data only');
+    } else {
+        console.log('✅ Supabase configuration detected');
+    }
+    
     try {
         _ensureAdminAndTraders();
     } catch (e) {

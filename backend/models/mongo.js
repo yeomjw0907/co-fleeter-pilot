@@ -22,7 +22,7 @@ const connectDB = async (uri) => {
         // Connection options
         const isProduction = process.env.NODE_ENV === 'production';
         const options = {
-            serverSelectionTimeoutMS: 5000,
+            serverSelectionTimeoutMS: isProduction ? 2000 : 5000, // Faster timeout for serverless
             socketTimeoutMS: 45000,
             family: 4 // Force IPv4
         };
