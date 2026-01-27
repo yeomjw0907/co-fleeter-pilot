@@ -118,19 +118,32 @@ async function loadAll() {
 
         // 2. Try Supabase Connection (primary database)
         if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-            console.log("Connecting to Supabase...");
+            console.log("📡 Connecting to Supabase...");
+            console.log("  URL:", process.env.SUPABASE_URL.substring(0, 30) + '...');
             try {
                 const client = supabase.connectSupabase();
                 
                 if (client) {
-                    console.log("Loading data from Supabase...");
+                    console.log("📊 Loading data from Supabase...");
                     try {
-                        // Test connection first
-                        const connected = await supabase.testConnection();
+                        // Test connection first with timeout
+                        const testPromise = supabase.testConnection();
+                        const timeout = new Promise((resolve) => setTimeout(() => {
+                            console.warn('⚠️ Supabase connection test timeout (5s)');
+                            resolve(false);
+                        }, 5000));
+                        
+                        const connected = await Promise.race([testPromise, timeout]);
                         
                         if (connected) {
-                            // Load all global data
-                            const globalData = await supabase.loadAllGlobalData();
+                            // Load all global data with timeout
+                            const loadPromise = supabase.loadAllGlobalData();
+                            const loadTimeout = new Promise((resolve) => setTimeout(() => {
+                                console.warn('⚠️ Supabase data load timeout (5s)');
+                                resolve({});
+                            }, 5000));
+                            
+                            const globalData = await Promise.race([loadPromise, loadTimeout]);
                             
                             // Apply loaded data to db
                             if (globalData.users) db.users = globalData.users;
@@ -147,22 +160,29 @@ async function loadAll() {
                             if (globalData.emailConfig) db.emailConfig = globalData.emailConfig;
                             
                             console.log("✅ Supabase data loaded successfully");
+                            console.log(`  Loaded ${Object.keys(globalData).length} data keys`);
                         } else {
-                            console.warn("Supabase connection test failed, using in-memory defaults");
+                            console.warn("⚠️ Supabase connection test failed, using in-memory defaults");
                         }
                     } catch (loadError) {
-                        console.error("Supabase load error:", loadError.message);
-                        console.warn("Using in-memory defaults due to load failure");
+                        console.error("❌ Supabase load error:", loadError.message);
+                        console.error("   Stack:", loadError.stack);
+                        console.warn("⚠️ Using in-memory defaults due to load failure");
                     }
                 } else {
-                    console.warn("Supabase client initialization failed, using in-memory defaults");
+                    console.error("❌ Supabase client initialization failed");
+                    console.warn("⚠️ Using in-memory defaults");
                 }
             } catch (supabaseError) {
-                console.error("Supabase connection error:", supabaseError.message);
-                console.warn("Continuing with in-memory storage");
+                console.error("❌ Supabase connection error:", supabaseError.message);
+                console.error("   Stack:", supabaseError.stack);
+                console.warn("⚠️ Continuing with in-memory storage");
             }
         } else {
-            console.warn("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set, using in-memory defaults");
+            console.error("❌ SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set");
+            console.error("   SUPABASE_URL:", process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
+            console.error("   SUPABASE_SERVICE_ROLE_KEY:", process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SET' : 'NOT SET');
+            console.warn("⚠️ Using in-memory defaults");
         }
 
 

@@ -155,19 +155,20 @@ app.use(async (req, res, next) => {
 
         if (req.path.startsWith('/api') && initPromise && !isInitialized) {
             try {
-                // Faster timeout for serverless (2 seconds)
-                const timeout = process.env.NODE_ENV === 'production' ? 2000 : 3000;
+                // Longer timeout for serverless to allow Supabase connection
+                const timeout = process.env.NODE_ENV === 'production' ? 8000 : 3000;
                 await Promise.race([
                     initPromise,
                     new Promise((resolve) => setTimeout(() => {
-                        console.warn('Initialization timeout, continuing with defaults');
+                        console.warn('⚠️ Initialization timeout after ' + timeout + 'ms, continuing with defaults');
                         isInitialized = true; // Mark as initialized to prevent retries
                         _ensureAdminAndTraders(); // Ensure at least admin exists
                         resolve(false);
                     }, timeout))
                 ]);
             } catch (error) {
-                console.error('Initialization error in middleware:', error.message);
+                console.error('❌ Initialization error in middleware:', error.message);
+                console.error('   Stack:', error.stack);
                 // Ensure basic setup even on error
                 isInitialized = true;
                 _ensureAdminAndTraders();
@@ -233,11 +234,16 @@ if (process.env.NODE_ENV !== 'production') {
     })();
 } else {
     console.log('✅ Co-Fleeter Backend loaded for Vercel Serverless');
+    console.log('Environment check:');
+    console.log('  NODE_ENV:', process.env.NODE_ENV);
+    console.log('  SUPABASE_URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
+    console.log('  SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SET (length: ' + process.env.SUPABASE_SERVICE_ROLE_KEY.length + ')' : 'NOT SET');
     
     // Check for required environment variables in production
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        console.warn('⚠️ SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set');
-        console.warn('⚠️ Application will run with in-memory data only');
+        console.error('❌ CRITICAL: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set');
+        console.error('❌ Application will run with in-memory data only');
+        console.error('❌ Please set environment variables in Vercel Dashboard');
     } else {
         console.log('✅ Supabase configuration detected');
     }
@@ -245,7 +251,7 @@ if (process.env.NODE_ENV !== 'production') {
     try {
         _ensureAdminAndTraders();
     } catch (e) {
-        console.warn('Failed to ensure admin user on load:', e.message);
+        console.error('Failed to ensure admin user on load:', e.message);
     }
 }
 
