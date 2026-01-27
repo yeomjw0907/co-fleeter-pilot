@@ -136,31 +136,55 @@ async function loadAll() {
                         const connected = await Promise.race([testPromise, timeout]);
                         
                         if (connected) {
-                            // Load all global data with timeout
-                            const loadPromise = supabase.loadAllGlobalData();
-                            const loadTimeout = new Promise((resolve) => setTimeout(() => {
-                                console.warn('⚠️ Supabase data load timeout (5s)');
-                                resolve({});
-                            }, 5000));
+                            // Load data from normalized tables
+                            console.log("📊 Loading from normalized tables...");
                             
-                            const globalData = await Promise.race([loadPromise, loadTimeout]);
+                            // Load users from users table
+                            const users = await supabase.loadUsers();
+                            if (users && users.length > 0) {
+                                db.users = users;
+                                console.log(`  ✅ Loaded ${users.length} users`);
+                            }
                             
-                            // Apply loaded data to db
-                            if (globalData.users) db.users = globalData.users;
-                            if (globalData.fleets) db.fleets = globalData.fleets;
+                            // Load fleets from fleets table
+                            const fleets = await supabase.loadFleets();
+                            if (fleets && Object.keys(fleets).length > 0) {
+                                db.fleets = fleets;
+                                console.log(`  ✅ Loaded fleets for ${Object.keys(fleets).length} users`);
+                            }
+                            
+                            // Load orders from orders table
+                            const orders = await supabase.loadOrders();
+                            if (orders && orders.length > 0) {
+                                db.orders = orders;
+                                console.log(`  ✅ Loaded ${orders.length} orders`);
+                            }
+                            
+                            // Load trades from trades table
+                            const trades = await supabase.loadTrades();
+                            if (trades && trades.length > 0) {
+                                db.trades = trades;
+                                console.log(`  ✅ Loaded ${trades.length} trades`);
+                            }
+                            
+                            // Load user_data from user_data table
+                            const userData = await supabase.loadUserData();
+                            if (userData && Object.keys(userData).length > 0) {
+                                db.userData = userData;
+                                console.log(`  ✅ Loaded user data for ${Object.keys(userData).length} users`);
+                            }
+                            
+                            // Load other data from global_data table (fuelData, euData, etc.)
+                            const globalData = await supabase.loadAllGlobalData();
                             if (globalData.fuelData) db.fuelData = globalData.fuelData;
                             if (globalData.euData) db.euData = globalData.euData;
                             if (globalData.ciiConstants) db.ciiConstants = globalData.ciiConstants;
                             if (globalData.euaManualData) db.euaManualData = globalData.euaManualData;
-                            if (globalData.userData) db.userData = globalData.userData;
                             if (globalData.traderContacts) db.traderContacts = globalData.traderContacts;
-                            if (globalData.orders) db.orders = globalData.orders;
-                            if (globalData.trades) db.trades = globalData.trades;
                             if (globalData.pools) db.pools = globalData.pools;
                             if (globalData.emailConfig) db.emailConfig = globalData.emailConfig;
                             
                             console.log("✅ Supabase data loaded successfully");
-                            console.log(`  Loaded ${Object.keys(globalData).length} data keys`);
                         } else {
                             console.warn("⚠️ Supabase connection test failed, using in-memory defaults");
                         }
@@ -265,28 +289,59 @@ function _ensureAdminAndTraders() {
 
 // --- Save Methods ---
 const save = {
-    users: () => { saveJSON(paths.USERS_FILE, db.users); saveToSupabase('users', db.users); },
-    fleets: () => { saveJSON(paths.FLEETS_FILE, db.fleets); saveToSupabase('fleets', db.fleets); },
-    fuelData: () => { saveJSON(paths.FUEL_DATA_FILE, db.fuelData); saveToSupabase('fuelData', db.fuelData); },
+    users: () => { 
+        saveJSON(paths.USERS_FILE, db.users); 
+        supabase.saveUsers(db.users); 
+    },
+    fleets: () => { 
+        saveJSON(paths.FLEETS_FILE, db.fleets); 
+        supabase.saveFleets(db.fleets); 
+    },
+    fuelData: () => { 
+        saveJSON(paths.FUEL_DATA_FILE, db.fuelData); 
+        saveToSupabase('fuelData', db.fuelData); 
+    },
     euData: () => {
         if (fs.existsSync(paths.EU_DATA_FILE)) fs.copyFileSync(paths.EU_DATA_FILE, paths.EU_DATA_FILE + '.backup');
         saveJSON(paths.EU_DATA_FILE, db.euData);
         saveToSupabase('euData', db.euData);
     },
-    ciiData: () => { saveJSON(paths.CII_DATA_FILE, db.ciiConstants); saveToSupabase('ciiConstants', db.ciiConstants); },
-    euaManual: () => { saveJSON(paths.EUA_MANUAL_FILE, db.euaManualData); saveToSupabase('euaManualData', db.euaManualData); },
-    euaSheet: () => { saveJSON(paths.EUA_SHEET_CACHE_FILE, db.euaSheetCache); },
-    accessLogs: () => { saveJSON(paths.ACCESS_LOGS_FILE, db.accessLogs); },
-    userData: () => { saveJSON(paths.USER_DATA_FILE, db.userData); saveToSupabase('userData', db.userData); },
-    traderContacts: () => { saveJSON(paths.TRADER_CONTACTS_FILE, db.traderContacts); saveToSupabase('traderContacts', db.traderContacts); },
+    ciiData: () => { 
+        saveJSON(paths.CII_DATA_FILE, db.ciiConstants); 
+        saveToSupabase('ciiConstants', db.ciiConstants); 
+    },
+    euaManual: () => { 
+        saveJSON(paths.EUA_MANUAL_FILE, db.euaManualData); 
+        saveToSupabase('euaManualData', db.euaManualData); 
+    },
+    euaSheet: () => { 
+        saveJSON(paths.EUA_SHEET_CACHE_FILE, db.euaSheetCache); 
+    },
+    accessLogs: () => { 
+        saveJSON(paths.ACCESS_LOGS_FILE, db.accessLogs); 
+    },
+    userData: () => { 
+        saveJSON(paths.USER_DATA_FILE, db.userData); 
+        supabase.saveUserData(db.userData); 
+    },
+    traderContacts: () => { 
+        saveJSON(paths.TRADER_CONTACTS_FILE, db.traderContacts); 
+        saveToSupabase('traderContacts', db.traderContacts); 
+    },
     trading: () => {
         saveJSON(paths.ORDERS_FILE, db.orders);
         saveJSON(paths.TRADES_FILE, db.trades);
-        saveToSupabase('orders', db.orders);
-        saveToSupabase('trades', db.trades);
+        supabase.saveOrders(db.orders);
+        supabase.saveTrades(db.trades);
     },
-    pools: () => { saveJSON(paths.POOLS_FILE, db.pools); saveToSupabase('pools', db.pools); },
-    emailConfig: () => { saveJSON(paths.EMAIL_CONFIG_FILE, db.emailConfig); saveToSupabase('emailConfig', db.emailConfig); }
+    pools: () => { 
+        saveJSON(paths.POOLS_FILE, db.pools); 
+        saveToSupabase('pools', db.pools); 
+    },
+    emailConfig: () => { 
+        saveJSON(paths.EMAIL_CONFIG_FILE, db.emailConfig); 
+        saveToSupabase('emailConfig', db.emailConfig); 
+    }
 };
 
 // Helper function for DB status check (used by Admin badge)

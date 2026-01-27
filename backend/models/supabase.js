@@ -195,6 +195,269 @@ const loadAllGlobalData = async () => {
     }
 };
 
+/**
+ * Save users to users table
+ * @param {Array} users - Array of user objects
+ * @returns {Promise<boolean>}
+ */
+const saveUsers = async (users) => {
+    try {
+        const client = getClient();
+        if (!client || !Array.isArray(users)) return false;
+
+        // Delete existing users and insert new ones
+        await client.from('users').delete().neq('id', '');
+        
+        const { error } = await client.from('users').insert(users);
+        if (error) {
+            console.error('Supabase save users error:', error.message);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error('Supabase save users error:', error.message);
+        return false;
+    }
+};
+
+/**
+ * Load users from users table
+ * @returns {Promise<Array>}
+ */
+const loadUsers = async () => {
+    try {
+        const client = getClient();
+        if (!client) return [];
+
+        const { data, error } = await client.from('users').select('*');
+        if (error) {
+            console.error('Supabase load users error:', error.message);
+            return [];
+        }
+        return data || [];
+    } catch (error) {
+        console.error('Supabase load users error:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Save fleets to fleets table
+ * @param {Object} fleets - Object with userId as key and ships array as value
+ * @returns {Promise<boolean>}
+ */
+const saveFleets = async (fleets) => {
+    try {
+        const client = getClient();
+        if (!client || !fleets) return false;
+
+        // Delete existing fleets
+        await client.from('fleets').delete().neq('user_id', '');
+
+        // Convert object to array of fleet records
+        const fleetRecords = Object.entries(fleets).map(([userId, ships]) => ({
+            user_id: userId,
+            ships: ships
+        }));
+
+        if (fleetRecords.length === 0) return true;
+
+        const { error } = await client.from('fleets').insert(fleetRecords);
+        if (error) {
+            console.error('Supabase save fleets error:', error.message);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error('Supabase save fleets error:', error.message);
+        return false;
+    }
+};
+
+/**
+ * Load fleets from fleets table
+ * @returns {Promise<Object>}
+ */
+const loadFleets = async () => {
+    try {
+        const client = getClient();
+        if (!client) return {};
+
+        const { data, error } = await client.from('fleets').select('*');
+        if (error) {
+            console.error('Supabase load fleets error:', error.message);
+            return {};
+        }
+
+        // Convert array to object { userId: ships }
+        const result = {};
+        if (data) {
+            data.forEach(fleet => {
+                result[fleet.user_id] = fleet.ships || [];
+            });
+        }
+        return result;
+    } catch (error) {
+        console.error('Supabase load fleets error:', error.message);
+        return {};
+    }
+};
+
+/**
+ * Save orders to orders table
+ * @param {Array} orders - Array of order objects
+ * @returns {Promise<boolean>}
+ */
+const saveOrders = async (orders) => {
+    try {
+        const client = getClient();
+        if (!client || !Array.isArray(orders)) return false;
+
+        await client.from('orders').delete().neq('id', '');
+        
+        if (orders.length === 0) return true;
+
+        const { error } = await client.from('orders').insert(orders);
+        if (error) {
+            console.error('Supabase save orders error:', error.message);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error('Supabase save orders error:', error.message);
+        return false;
+    }
+};
+
+/**
+ * Load orders from orders table
+ * @returns {Promise<Array>}
+ */
+const loadOrders = async () => {
+    try {
+        const client = getClient();
+        if (!client) return [];
+
+        const { data, error } = await client.from('orders').select('*');
+        if (error) {
+            console.error('Supabase load orders error:', error.message);
+            return [];
+        }
+        return data || [];
+    } catch (error) {
+        console.error('Supabase load orders error:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Save trades to trades table
+ * @param {Array} trades - Array of trade objects
+ * @returns {Promise<boolean>}
+ */
+const saveTrades = async (trades) => {
+    try {
+        const client = getClient();
+        if (!client || !Array.isArray(trades)) return false;
+
+        await client.from('trades').delete().neq('id', '');
+        
+        if (trades.length === 0) return true;
+
+        const { error } = await client.from('trades').insert(trades);
+        if (error) {
+            console.error('Supabase save trades error:', error.message);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error('Supabase save trades error:', error.message);
+        return false;
+    }
+};
+
+/**
+ * Load trades from trades table
+ * @returns {Promise<Array>}
+ */
+const loadTrades = async () => {
+    try {
+        const client = getClient();
+        if (!client) return [];
+
+        const { data, error } = await client.from('trades').select('*');
+        if (error) {
+            console.error('Supabase load trades error:', error.message);
+            return [];
+        }
+        return data || [];
+    } catch (error) {
+        console.error('Supabase load trades error:', error.message);
+        return [];
+    }
+};
+
+/**
+ * Save user data to user_data table
+ * @param {Object} userData - Object with userId as key and data as value
+ * @returns {Promise<boolean>}
+ */
+const saveUserData = async (userData) => {
+    try {
+        const client = getClient();
+        if (!client || !userData) return false;
+
+        await client.from('user_data').delete().neq('user_id', '');
+
+        const userDataRecords = Object.entries(userData).map(([userId, data]) => ({
+            user_id: userId,
+            calculations: data.calculations || []
+        }));
+
+        if (userDataRecords.length === 0) return true;
+
+        const { error } = await client.from('user_data').insert(userDataRecords);
+        if (error) {
+            console.error('Supabase save user_data error:', error.message);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error('Supabase save user_data error:', error.message);
+        return false;
+    }
+};
+
+/**
+ * Load user data from user_data table
+ * @returns {Promise<Object>}
+ */
+const loadUserData = async () => {
+    try {
+        const client = getClient();
+        if (!client) return {};
+
+        const { data, error } = await client.from('user_data').select('*');
+        if (error) {
+            console.error('Supabase load user_data error:', error.message);
+            return {};
+        }
+
+        const result = {};
+        if (data) {
+            data.forEach(item => {
+                result[item.user_id] = {
+                    calculations: item.calculations || []
+                };
+            });
+        }
+        return result;
+    } catch (error) {
+        console.error('Supabase load user_data error:', error.message);
+        return {};
+    }
+};
+
 module.exports = {
     connectSupabase,
     getClient,
@@ -202,5 +465,16 @@ module.exports = {
     isConnected,
     saveGlobalData,
     loadGlobalData,
-    loadAllGlobalData
+    loadAllGlobalData,
+    // Normalized table operations
+    saveUsers,
+    loadUsers,
+    saveFleets,
+    loadFleets,
+    saveOrders,
+    loadOrders,
+    saveTrades,
+    loadTrades,
+    saveUserData,
+    loadUserData
 };

@@ -63,6 +63,90 @@ function loadJSON(filePath) {
     return null;
 }
 
+// Save to normalized tables (users, fleets, orders, trades, user_data)
+async function saveToNormalizedTable(tableName, data) {
+    if (!data) {
+        console.log(`  ⏭️  ${tableName}: No data to migrate`);
+        return false;
+    }
+    
+    try {
+        // Delete existing data
+        await supabase.from(tableName).delete().neq('id', '');
+        
+        let records = [];
+        
+        // Convert data based on table type
+        if (tableName === 'fleets') {
+            // fleets: { userId: [ships] } → [{ user_id, ships }]
+            records = Object.entries(data).map(([userId, ships]) => ({
+                user_id: userId,
+                ships: ships
+            }));
+        } else if (tableName === 'user_data') {
+            // userData: { userId: { calculations } } → [{ user_id, calculations }]
+            records = Object.entries(data).map(([userId, userData]) => ({
+                user_id: userId,
+                calculations: userData.calculations || []
+            }));
+        } else if (tableName === 'users') {
+            // users: clean and ensure all required fields
+            records = data.map(user => ({
+                id: user.id,
+                email: user.email,
+                password: user.password,
+                name: user.name,
+                company: user.company,
+                role: user.role || 'USER',
+                permissions: user.permissions || [],
+                id_custom: user.id_custom || null,
+                phone: user.phone || null,
+                created_at: user.created_at || new Date().toISOString()
+            }));
+        } else if (tableName === 'orders') {
+            // orders: ensure all fields including linkedOrderId
+            records = data.map(order => ({
+                id: order.id,
+                timestamp: order.timestamp,
+                quotes: order.quotes || {},
+                status: order.status || 'OPEN',
+                symbol: order.symbol,
+                type: order.type,
+                quantity: order.quantity,
+                price: order.price,
+                owner: order.owner,
+                ownerCompany: order.ownerCompany || '',
+                linkedOrderId: order.linkedOrderId || null,
+                created_at: order.created_at || new Date(order.timestamp).toISOString()
+            }));
+        } else {
+            // trades: already in array format
+            records = data;
+        }
+        
+        if (records.length === 0) {
+            console.log(`  ⏭️  ${tableName}: No records to insert`);
+            return true;
+        }
+        
+        const { error } = await supabase.from(tableName).insert(records);
+        
+        if (error) {
+            console.error(`  ❌ ${tableName}: Error -`, error.message);
+            console.error(`     Details:`, error.details);
+            console.error(`     Hint:`, error.hint);
+            return false;
+        }
+        
+        console.log(`  ✅ ${tableName}: Migrated ${records.length} record(s)`);
+        return true;
+    } catch (error) {
+        console.error(`  ❌ ${tableName}: Exception -`, error.message);
+        return false;
+    }
+}
+
+// Save to global_data table (for config and reference data)
 async function saveToGlobalData(key, data) {
     if (!data) {
         console.log(`  ⏭️  ${key}: No data to migrate`);
@@ -83,7 +167,7 @@ async function saveToGlobalData(key, data) {
             return false;
         }
         
-        console.log(`  ✅ ${key}: Migrated successfully`);
+        console.log(`  ✅ ${key}: Migrated to global_data`);
         return true;
     } catch (error) {
         console.error(`  ❌ ${key}: Exception -`, error.message);
@@ -147,12 +231,76 @@ async function migrate() {
     };
     console.log('');
     
-    // Migrate to Supabase global_data table
-    console.log('3️⃣ Migrating data to Supabase...');
+    // Migrate to Supabase normalized tables
+    console.log('3️⃣ Migrating data to Supabase normalized tables...');
     let successCount = 0;
     let failCount = 0;
     
-    for (const [key, value] of Object.entries(data)) {
+    // Migrate users first
+    console.log('  → Migrating users...');
+    const usersSuccess = await saveToNormalizedTable('users', data.users);
+    if (usersSuccess) successCount++; else failCount++;
+    
+    // Get valid user IDs from users table
+    const validUserIds = new Set((data.users || []).map(u => u.id));
+    console.log(`  → Valid user IDs: ${validUserIds.size}`);
+    
+    // Filter fleets to only include valid user IDs
+    const validFleets = {};
+    if (data.fleets) {
+        Object.entries(data.fleets).forEach(([userId, ships]) => {
+            if (validUserIds.has(userId)) {
+                validFleets[userId] = ships;
+            } else {
+                console.log(`  ⚠️  Skipping fleet for non-existent user: ${userId}`);
+            }
+        });
+    }
+    
+    // Filter userData to only include valid user IDs
+    const validUserData = {};
+    if (data.userData) {
+        Object.entries(data.userData).forEach(([userId, userData]) => {
+            if (validUserIds.has(userId)) {
+                validUserData[userId] = userData;
+            } else {
+                console.log(`  ⚠️  Skipping user_data for non-existent user: ${userId}`);
+            }
+        });
+    }
+    
+    // Migrate other normalized tables
+    console.log('  → Migrating fleets...');
+    const fleetsSuccess = await saveToNormalizedTable('fleets', validFleets);
+    if (fleetsSuccess) successCount++; else failCount++;
+    
+    console.log('  → Migrating orders...');
+    const ordersSuccess = await saveToNormalizedTable('orders', data.orders);
+    if (ordersSuccess) successCount++; else failCount++;
+    
+    console.log('  → Migrating trades...');
+    const tradesSuccess = await saveToNormalizedTable('trades', data.trades);
+    if (tradesSuccess) successCount++; else failCount++;
+    
+    console.log('  → Migrating user_data...');
+    const userDataSuccess = await saveToNormalizedTable('user_data', validUserData);
+    if (userDataSuccess) successCount++; else failCount++;
+    
+    console.log('');
+    console.log('4️⃣ Migrating config data to global_data table...');
+    
+    // Migrate config data to global_data
+    const globalDataKeys = {
+        'fuelData': data.fuelData,
+        'euData': data.euData,
+        'ciiConstants': data.ciiConstants,
+        'euaManualData': data.euaManualData,
+        'traderContacts': data.traderContacts,
+        'pools': data.pools,
+        'emailConfig': data.emailConfig
+    };
+    
+    for (const [key, value] of Object.entries(globalDataKeys)) {
         const success = await saveToGlobalData(key, value);
         if (success) {
             successCount++;
@@ -165,7 +313,6 @@ async function migrate() {
     console.log('✅ Migration Complete!');
     console.log(`   Success: ${successCount}`);
     console.log(`   Failed: ${failCount}`);
-    console.log(`   Skipped: ${Object.keys(data).length - successCount - failCount}`);
     console.log('');
     console.log('📝 Next steps:');
     console.log('   1. Verify data in Supabase Dashboard (Table Editor)');
