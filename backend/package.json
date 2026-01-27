@@ -8,7 +8,9 @@
         "dev": "nodemon server.js"
     },
     "dependencies": {
+        "@supabase/supabase-js": "^2.93.1",
         "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
         "express": "^4.18.2",
         "mongoose": "^8.9.3"
     },
