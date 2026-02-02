@@ -9,7 +9,16 @@ class TradingService {
             if (symbolFilter) url += `symbol=${symbolFilter}&`;
             if (userEmail) url += `userEmail=${encodeURIComponent(userEmail)}`;
 
-            const response = await fetch(url);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
+
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             return await response.json();
         } catch (e) {
             console.error('Failed to get orders', e);
@@ -159,7 +168,16 @@ class TradingService {
 
     async getExecutedVolumes(symbol) {
         try {
-            const response = await fetch(`${this.baseUrl}/volumes/${symbol}`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
+
+            const response = await fetch(`${this.baseUrl}/volumes/${symbol}`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             return await response.json();
         } catch (e) {
             console.error('Failed to get volumes', e);

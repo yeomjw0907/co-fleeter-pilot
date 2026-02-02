@@ -558,3 +558,25 @@ exports.updateStatus = (req, res) => {
     save.trading();
     res.json({ success: true });
 };
+
+exports.getExecutedVolumes = (req, res) => {
+    const { symbol } = req.params;
+    try {
+        // Calculate executed volumes from filled orders
+        const filledOrders = db.orders.filter(o => 
+            o.status === 'FILLED' && 
+            (!symbol || o.symbol === symbol)
+        );
+        
+        const volumes = {};
+        filledOrders.forEach(order => {
+            const key = order.symbol || 'ALL';
+            volumes[key] = (volumes[key] || 0) + (order.filledQuantity || order.quantity || 0);
+        });
+        
+        res.json(volumes);
+    } catch (e) {
+        console.error('Error getting executed volumes:', e);
+        res.json({});
+    }
+};

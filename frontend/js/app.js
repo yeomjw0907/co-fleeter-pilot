@@ -1227,12 +1227,22 @@ async function renderTradingView(marketData) {
         } catch (e) {
             console.error("Error loading market data:", e);
             // Fallback to empty to ensure render proceeds
-            toast.error("Partial failure loading market data");
+            orders = [];
+            executedVolumes = {};
+            if (typeof toast !== 'undefined' && toast.error) {
+                toast.error("Partial failure loading market data");
+            }
+        }
+        
+        // Ensure orders is an array
+        if (!Array.isArray(orders)) {
+            console.warn("Orders is not an array, defaulting to empty array");
+            orders = [];
         }
 
         const activeFilter = window.currentOrderBookFilter || 'ALL';
         const isRFQ = marketData.useQuoteSystem === true;
-        const isTrader = currentUser.role === 'TRADER';
+        const isTrader = currentUser && currentUser.role === 'TRADER';
 
         let html = `
         <div class="flex justify-between items-center mb-4">
@@ -1714,6 +1724,10 @@ async function renderTradingView(marketData) {
     // Initialize Chart
     setTimeout(async () => {
         if (marketData.symbol !== 'FEM') {
+            // Destroy existing chart before creating new one
+            charts.destroy('price-history-chart');
+            charts.destroy('depth-chart');
+            
             let chartData = [];
 
             if (marketData.symbol === 'EUA') {
@@ -2312,7 +2326,11 @@ window.updateCiiRate = function () {
 
 window.updateFuelTypeOptions = function (classSelect) {
     const row = classSelect.closest('tr');
+    if (!row) return;
+    
     const typeSelect = row.querySelector('.calc-fuel-type');
+    if (!typeSelect) return; // CII 타입에는 이 요소가 없을 수 있음
+    
     const selectedClass = classSelect.value;
 
     // Clear existing
@@ -2328,8 +2346,10 @@ window.updateFuelTypeOptions = function (classSelect) {
         typeSelect.appendChild(o);
     });
 
-    // Trigger default update
-    updateFuelDefaults(typeSelect);
+    // Trigger default update (EU 타입에만 해당)
+    if (typeSelect) {
+        updateFuelDefaults(typeSelect);
+    }
 };
 
 window.addFuelRow = function () {
@@ -2435,8 +2455,13 @@ window.updateRowCalc = function (input) {
 
 window.updateFuelDefaults = function (typeSelect) {
     const row = typeSelect.closest('tr');
+    if (!row) return;
+    
     const fuelName = typeSelect.value;
-    const fuelClass = row.querySelector('.calc-fuel-class').value;
+    const fuelClassEl = row.querySelector('.calc-fuel-class');
+    if (!fuelClassEl) return;
+    
+    const fuelClass = fuelClassEl.value;
 
     const factor = calculatorService._getCO2Factor(fuelName, fuelClass); // This gets Cf, not Intensity/LCV. Need new helper.
     const details = calculatorService._getFuelDetails(fuelName, fuelClass); // Assume we add this helper
@@ -2447,8 +2472,15 @@ window.updateFuelDefaults = function (typeSelect) {
         // Or 'WtT (CO2eq)' + 'TtW (CO2eq)'? 
         // Let's use 'WtW' or calculate it using defaults.
         // Actually, let's just use what we have in FUEL_DATA if possible.
-        row.querySelector('.calc-intensity-def').value = details.intensity || '-';
-        row.querySelector('.calc-lcv-def').value = details.lcv || '-';
+        const intensityDef = row.querySelector('.calc-intensity-def');
+        const lcvDef = row.querySelector('.calc-lcv-def');
+        
+        if (intensityDef) {
+            intensityDef.value = details.intensity || '-';
+        }
+        if (lcvDef) {
+            lcvDef.value = details.lcv || '-';
+        }
     }
 };
 

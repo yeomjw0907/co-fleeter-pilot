@@ -528,8 +528,24 @@ class ChartsManager {
         const ctx = document.getElementById(canvasId);
         if (!ctx) return null;
 
+        // Destroy existing chart to prevent canvas reuse error
         if (this.charts[canvasId]) {
-            try { this.charts[canvasId].destroy(); } catch (e) { }
+            try { 
+                this.charts[canvasId].destroy(); 
+                delete this.charts[canvasId];
+            } catch (e) {
+                console.warn('Error destroying chart:', e);
+            }
+        }
+        
+        // Also check if Chart.js has registered this canvas and destroy it
+        if (ctx.chart) {
+            try {
+                ctx.chart.destroy();
+                ctx.chart = null;
+            } catch (e) {
+                console.warn('Error destroying canvas chart:', e);
+            }
         }
 
         const labels = historyData.map(d => d.time);
